@@ -31,7 +31,6 @@
     .dz.hover{border-color:var(--accent); background:#0e1a13}
     .x-btn{position:absolute; top:8px; right:8px; background:#2a3748; color:#cfd8e3; width:22px; height:22px; border-radius:999px; font-size:14px; line-height:22px; text-align:center}
     .x-btn:hover{background:#35465c}
-    /* aligned statement grid */
     .stmt-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:12px}
     .stmt-col{display:grid; grid-auto-rows:minmax(40px,auto); gap:10px}
     .pill-row{display:flex; align-items:center; justify-content:space-between; padding:8px 12px}
@@ -75,54 +74,103 @@
     const IconBtn=({onClick, title, children})=>
       <button className="btn btn-ghost btn-icon" style={{borderColor:'var(--border)'}} title={title} onClick={onClick}>{children}</button>;
 
-    // FMP fetch
-    async function fetchFmpStatements(ticker, apiKey){
-      const base = "https://financialmodelingprep.com/api/v3";
-      const q = `?period=annual&limit=4&apikey=${encodeURIComponent(apiKey)}`;
-      const [inc, bal, cfs] = await Promise.all([
-        fetch(`${base}/income-statement/${ticker}${q}`).then(r=>r.ok?r.json():Promise.reject("INC")),
-        fetch(`${base}/balance-sheet-statement/${ticker}${q}`).then(r=>r.ok?r.json():Promise.reject("BAL")),
-        fetch(`${base}/cash-flow-statement/${ticker}${q}`).then(r=>r.ok?r.json():Promise.reject("CFS")),
-      ]);
+    /* ========= Provider switch: Alpha Vantage ========= */
 
+    const AV_BASE = 'https://www.alphavantage.co/query';
+    const getApiKey = () => (localStorage.getItem('alpha_apikey') || '').trim();
+    const setApiKey = k => localStorage.setItem('alpha_apikey', k.trim());
+
+    async function fetchJson(u){
+      const r = await fetch(u, { cache: 'no-store' });
+      if(!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json();
+      if (j.Note || j['Error Message']) throw new Error('Provider limit or key error');
+      return j;
+    }
+
+    // Simple in-session cache to reduce calls
+    const mem = new Map();
+    function cached(key, loader){
+      if (mem.has(key)) return mem.get(key);
+      const p = loader().catch(e => { mem.delete(key); throw e; });
+      mem.set(key, p);
+      return p;
+    }
+
+    function avUrl(fn, symbol, key){
+      return `${AV_BASE}?function=${fn}&symbol=${encodeURIComponent(symbol)}&apikey=${encodeURIComponent(key)}`;
+    }
+
+    async function avIncome(symbol){
+      const key = getApiKey(); if(!key) throw new Error('No API key');
+      return cached(`IS:${symbol}`, () => fetchJson(avUrl('INCOME_STATEMENT', symbol, key)));
+    }
+    async function avBalance(symbol){
+      const key = getApiKey(); if(!key) throw new Error('No API key');
+      return cached(`BS:${symbol}`, () => fetchJson(avUrl('BALANCE_SHEET', symbol, key)));
+    }
+    async function avCash(symbol){
+      const key = getApiKey(); if(!key) throw new Error('No API key');
+      return cached(`CF:${symbol}`, () => fetchJson(avUrl('CASH_FLOW', symbol, key)));
+    }
+
+    // Normalize Alpha Vantage payloads into your app shape
+    function mapFromAV(ticker, is, bs, cf){
       const out = { name: ticker, statements: {} };
-      for (const row of inc) {
-        const y = Number(row.calendarYear || (row.date||"").slice(0,4));
+
+      const pickYear = obj => obj?.fiscalDateEnding?.slice(0,4) || obj?.reportedCurrency || 'n/a';
+
+      for (const row of is.annualReports || []) {
+        const y = Number(row.fiscalDateEnding?.slice(0,4));
+        if (!y) continue;
         out.statements[y] ||= { IncomeStatement:{}, BalanceSheet:{}, CashFlow:{} };
         out.statements[y].IncomeStatement = {
-          Revenue: row.revenue,
-          "Cost of Revenue": row.costOfRevenue,
-          "Gross Profit": row.grossProfit,
-          "Operating Income": row.operatingIncome,
-          "Net Income": row.netIncome,
+          Revenue: +row.totalRevenue || 0,
+          "Cost of Revenue": +row.costOfRevenue || 0,
+          "Gross Profit": +row.grossProfit || 0,
+          "Operating Income": +row.operatingIncome || 0,
+          "Net Income": +row.netIncome || 0,
         };
       }
-      for (const row of bal) {
-        const y = Number(row.calendarYear || (row.date||"").slice(0,4));
+      for (const row of bs.annualReports || []) {
+        const y = Number(row.fiscalDateEnding?.slice(0,4));
+        if (!y) continue;
         out.statements[y] ||= { IncomeStatement:{}, BalanceSheet:{}, CashFlow:{} };
         out.statements[y].BalanceSheet = {
-          "Total Assets": row.totalAssets,
-          "Total Liabilities": row.totalLiabilities,
-          Equity: row.totalStockholdersEquity,
-          "Current Assets": row.totalCurrentAssets,
-          "Current Liabilities": row.totalCurrentLiabilities,
+          "Total Assets": +row.totalAssets || 0,
+          "Total Liabilities": +row.totalLiabilities || 0,
+          Equity: +row.totalShareholderEquity || 0,
+          "Current Assets": +row.totalCurrentAssets || 0,
+          "Current Liabilities": +row.totalCurrentLiabilities || 0,
         };
       }
-      for (const row of cfs) {
-        const y = Number(row.calendarYear || (row.date||"").slice(0,4));
+      for (const row of cf.annualReports || []) {
+        const y = Number(row.fiscalDateEnding?.slice(0,4));
+        if (!y) continue;
         out.statements[y] ||= { IncomeStatement:{}, BalanceSheet:{}, CashFlow:{} };
+        const op = +row.operatingCashflow || 0;
+        const capex = +row.capitalExpenditures || 0;
         out.statements[y].CashFlow = {
-          "Cash from Operations": row.netCashProvidedByOperatingActivities,
-          CapEx: row.capitalExpenditure,
-          "Free Cash Flow": (row.netCashProvidedByOperatingActivities ?? 0) + (row.capitalExpenditure ?? 0),
+          "Cash from Operations": op,
+          CapEx: capex,
+          "Free Cash Flow": op + capex, // capex is negative in AV, addition is correct
         };
       }
       return out;
     }
 
+    async function fetchStatements(ticker){
+      // One batch per ticker
+      const [is, bs, cf] = await Promise.all([
+        avIncome(ticker), avBalance(ticker), avCash(ticker)
+      ]);
+      return mapFromAV(ticker, is, bs, cf);
+    }
+
+    /* ================= App =================== */
+
     function App(){
-      // Start empty
-      const [companies,setCompanies]=useState([]); // {ticker,name,data:{statements},years[],yearIndex,loading?,isEmpty?}
+      const [companies,setCompanies]=useState([]);
       const [ratioDefs,setRatioDefs]=useState([
         {numerator:"Gross Profit",denominator:"Revenue",label:"Gross Margin"},
         {numerator:"Total Liabilities",denominator:"Equity",label:"Debt to Equity"},
@@ -131,33 +179,29 @@
       ]);
       const [baselineIdx,setBaselineIdx]=useState(0);
       const [showSettings,setShowSettings]=useState(false);
-      const [fmpKey,setFmpKey]=useState("");
+      const [alphaKeyUI,setAlphaKeyUI]=useState(getApiKey());
 
       function addTickerSlot(){ setCompanies(p=>[...p,{ticker:"",name:"",data:{statements:{}},years:[],yearIndex:0,isEmpty:true}]); }
 
       async function replaceEmptyWith(t,at){
         const T=t.trim().toUpperCase(); if(!T) return;
-        // optimistic loading
-        setCompanies(p=>p.map((c,i)=> i===at ? {ticker:T,name:"Loading…",data:{statements:{}},years:[],yearIndex:0,loading:true} : c));
+        setCompanies(p=>p.map((c,i)=> i===at ? {ticker:T,name:"Loading...",data:{statements:{}},years:[],yearIndex:0,loading:true} : c));
         try{
-          if(!fmpKey){ throw new Error("Missing API key in Settings"); }
-          const payload=await fetchFmpStatements(T,fmpKey);
+          if(!getApiKey()) throw new Error("Missing API key in Settings");
+          const payload=await fetchStatements(T);
           const years=Object.keys(payload.statements||{}).map(Number).sort((a,b)=>b-a);
           const normalized={ticker:T,name:payload.name||T,data:payload,years,yearIndex:0};
           setCompanies(p=>p.map((c,i)=> i===at ? normalized : c));
         }catch(e){
           console.warn("Fetch failed", e);
-          alert(`Could not fetch ${T}. Check API key, ticker, or rate limit.`);
-          // keep slot empty so user can try again
+          alert(`Could not fetch ${T}. Check API key or rate limit.`);
           setCompanies(p=>p.map((c,i)=> i===at ? {ticker:"",name:"",data:{statements:{}},years:[],yearIndex:0,isEmpty:true} : c));
         }
       }
 
       function removeCompany(i){ setCompanies(p=>p.filter((_,idx)=>idx!==i)); if (baselineIdx>=i && baselineIdx>0) setBaselineIdx(b=>b-1); }
 
-      // Years are sorted newest first at index 0
       function shiftYear(i,dir){
-        // dir < 0 back in time, dir > 0 forward in time
         setCompanies(p=>p.map((c,idx)=>{
           if(idx!==i) return c;
           const max = Math.max(0, c.years.length-1);
@@ -214,19 +258,14 @@
                 </div>
                 <RatioBuilder onMakeRatio={makeRatio}/>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {[
-                    {n:"Gross Profit",d:"Revenue"},
-                    {n:"Net Income",d:"Revenue"},
-                    {n:"Net Income",d:"Equity"},
-                    {n:"Current Assets",d:"Current Liabilities"},
-                    {n:"Total Liabilities",d:"Equity"},
-                    {n:"Cash from Operations",d:"Revenue"},
-                  ].map(p=>(
-                    <button key={p.n+p.d} className="text-[11px] px-2 py-1 rounded-lg btn btn-ghost"
-                      style={{borderColor:'var(--border)'}}
-                      onClick={()=>makeRatio({label:p.n,value:1},{label:p.d,value:1})}>
-                      {ratioLabel(p.n,p.d)}
-                    </button>
+                  {[{n:"Gross Profit",d:"Revenue"},{n:"Net Income",d:"Revenue"},{n:"Net Income",d:"Equity"},
+                    {n:"Current Assets",d:"Current Liabilities"},{n:"Total Liabilities",d:"Equity"},
+                    {n:"Cash from Operations",d:"Revenue"}].map(p=>(
+                      <button key={p.n+p.d} className="text-[11px] px-2 py-1 rounded-lg btn btn-ghost"
+                        style={{borderColor:'var(--border)'}}
+                        onClick={()=>makeRatio({label:p.n,value:1},{label:p.d,value:1})}>
+                        {ratioLabel(p.n,p.d)}
+                      </button>
                   ))}
                 </div>
               </div>
@@ -238,7 +277,11 @@
           </main>
 
           {showSettings && (
-            <SettingsModal onClose={()=>setShowSettings(false)} fmpKey={fmpKey} setFmpKey={setFmpKey}/>
+            <SettingsModal
+              onClose={()=>{ setShowSettings(false); setAlphaKeyUI(getApiKey()); }}
+              keyUI={alphaKeyUI}
+              onSaveKey={(k)=>{ setAlphaKeyUI(k); setApiKey(k); }}
+            />
           )}
         </div>
       );
@@ -416,7 +459,8 @@
       );
     }
 
-    function SettingsModal({onClose,fmpKey,setFmpKey}){
+    function SettingsModal({onClose,keyUI,onSaveKey}){
+      const [val,setVal]=useState(keyUI||"");
       return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4">
           <div className="card max-w-3xl w-full p-4">
@@ -427,14 +471,16 @@
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <div className="text-sm font-semibold mb-1">Live data API key</div>
-                <div className="text-[11px] subtle mb-2">Enter your FMP key to enable client fetches.</div>
-                <input value={fmpKey} onChange={e=>setFmpKey(e.target.value)} placeholder="FMP API key"
+                <div className="text-[11px] subtle mb-2">Alpha Vantage key. Stored in localStorage.</div>
+                <input value={val} onChange={e=>setVal(e.target.value)} placeholder="Alpha Vantage API key"
                   className="px-3 py-2 rounded-xl btn w-full" style={{background:'var(--surface-0)',borderColor:'var(--border)'}}/>
-                <div className="text-[11px] subtle mt-2">Stored only in memory for this page.</div>
+                <div className="mt-2 flex gap-2">
+                  <button className="btn btn-accent px-3 py-2" onClick={()=>{ onSaveKey(val); }}>Save</button>
+                </div>
               </div>
               <div>
                 <div className="text-sm font-semibold mb-1">How to use</div>
-                <div className="text-[12px] subtle">Click “Add ticker slot”, type a symbol like AAPL or MSFT, then +. Use arrows to flip years on each card. Drag pills to build ratios.</div>
+                <div className="text-[12px] subtle">Click “Add ticker slot”, type AAPL or MSFT, then +. Use arrows to flip years. Drag pills to build ratios.</div>
               </div>
             </div>
           </div>
