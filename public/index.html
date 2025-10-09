@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>The Iron Vanguard · Ratios Builder</title>
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --bg:#0b0f14; --surface-0:#0f1520; --surface-1:#121a26; --surface-2:#17212e;
+      --border:#263242; --text:#e6edf3; --muted:#9fb1c1; --accent:#2ecc71; --danger:#e35d6a;
+      --pill:#1a2432; --pill-hover:#202c3d; --dropzone:#192330;
+    }
+    html,body{height:100%; background:var(--bg); color:var(--text)}
+    *{box-sizing:border-box}
+    .card{background:var(--surface-1); border:1px solid var(--border); border-radius:18px; overflow:hidden}
+    .pill{background:var(--pill); border:1px solid var(--border); border-radius:12px}
+    .pill:hover{background:var(--pill-hover)}
+    .pill-draggable{cursor:grab}
+    .pill-draggable:active{cursor:grabbing}
+    .subtle{color:var(--muted)}
+    .btn{border:1px solid var(--border); border-radius:12px}
+    .btn-ghost{background:transparent}
+    .btn-accent{background:var(--accent); color:#0b0f14}
+    .btn-icon{width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border-radius:8px}
+    .dot-green{background:var(--accent); width:32px; height:32px; border-radius:10px}
+    .outline-best{outline:2px solid var(--accent); outline-offset:2px; border-radius:10px}
+    .dz{background:var(--dropzone); border:2px dashed var(--border); border-radius:14px}
+    .dz.hover{border-color:var(--accent); background:#0e1a13}
+    .x-btn{position:absolute; top:8px; right:8px; background:#2a3748; color:#cfd8e3; width:22px; height:22px; border-radius:999px; font-size:14px; line-height:22px; text-align:center}
+    .x-btn:hover{background:#35465c}
+    /* aligned statement grid */
+    .stmt-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:12px}
+    .stmt-col{display:grid; grid-auto-rows:minmax(40px,auto); gap:10px}
+    .pill-row{display:flex; align-items:center; justify-content:space-between; padding:8px 12px}
+  </style>
+
+  <!-- React 18 UMD + Babel -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const {useEffect, useState} = React;
+
+    // Known labels for auto-naming
+    const KNOWN = {
+      "Gross Profit/Revenue":"Gross Margin",
+      "Net Income/Revenue":"Net Margin",
+      "Net Income/Equity":"Return on Equity",
+      "Net Income/Total Assets":"Return on Assets",
+      "Current Assets/Current Liabilities":"Current Ratio",
+      "Total Liabilities/Equity":"Debt to Equity",
+      "Cash from Operations/Revenue":"Operating Cash Flow to Sales",
+      "Free Cash Flow/Revenue":"FCF Margin",
+    };
+
+    const fmtMoney = n=>{
+      if (n==null || Number.isNaN(n)) return "–";
+      const a=Math.abs(n);
+      const unit=a>=1e9?"B":a>=1e6?"M":a>=1e3?"K":"";
+      const base=unit==="B"?n/1e9:unit==="M"?n/1e6:unit==="K"?n/1e3:n;
+      return `${base.toFixed(2)}${unit}`;
+    };
+    const ratioLabel=(num,den)=>KNOWN[`${num}/${den}`]||`${num} ÷ ${den}`;
+    const higherIsBetter=label=>/debt to equity/i.test(label)?false:true;
+
+    const Tag=({children})=>
+      <span className="px-2 py-0.5 rounded-full text-[11px] subtle border" style={{borderColor:'var(--border)'}}>{children}</span>;
+    const IconBtn=({onClick, title, children})=>
+      <button className="btn btn-ghost btn-icon" style={{borderColor:'var(--border)'}} title={title} onClick={onClick}>{children}</button>;
+
+    // FMP fetch
+    async function fetchFmpStatements(ticker, apiKey){
+      const base = "https://financialmodelingprep.com/api/v3";
+      const q = `?period=annual&limit=4&apikey=${encodeURIComponent(apiKey)}`;
+      const [inc, bal, cfs] = await Promise.all([
+        fetch(`${base}/income-statement/${ticker}${q}`).then(r=>r.ok?r.json():Promise.reject("INC")),
+        fetch(`${base}/balance-sheet-statement/${ticker}${q}`).then(r=>r.ok?r.json():Promise.reject("BAL")),
+        fetch(`${base}/cash-flow-statement/${ticker}${q}`).then(r=>r.ok?r.json():Promise.reject("CFS")),
+      ]);
+
+      const out = { name: ticker, statements: {} };
+      for (const row of inc) {
+        const y = Number(row.calendarYear || (row.date||"").slice(0,4));
+        out.statements[y] ||= { IncomeStatement:{}, BalanceSheet:{}, CashFlow:{} };
+        out.statements[y].IncomeStatement = {
+          Revenue: row.revenue,
+          "Cost of Revenue": row.costOfRevenue,
+          "Gross Profit": row.grossProfit,
+          "Operating Income": row.operatingIncome,
+          "Net Income": row.netIncome,
+        };
+      }
+      for (const row of bal) {
+        const y = Number(row.calendarYear || (row.date||"").slice(0,4));
+        out.statements[y] ||= { IncomeStatement:{}, BalanceSheet:{}, CashFlow:{} };
+        out.statements[y].BalanceSheet = {
+          "Total Assets": row.totalAssets,
+          "Total Liabilities": row.totalLiabilities,
+          Equity: row.totalStockholdersEquity,
+          "Current Assets": row.totalCurrentAssets,
+          "Current Liabilities": row.totalCurrentLiabilities,
+        };
+      }
+      for (const row of cfs) {
+        const y = Number(row.calendarYear || (row.date||"").slice(0,4));
+        out.statements[y] ||= { IncomeStatement:{}, BalanceSheet:{}, CashFlow:{} };
+        out.statements[y].CashFlow = {
+          "Cash from Operations": row.netCashProvidedByOperatingActivities,
+          CapEx: row.capitalExpenditure,
+          "Free Cash Flow": (row.netCashProvidedByOperatingActivities ?? 0) + (row.capitalExpenditure ?? 0),
+        };
+      }
+      return out;
+    }
+
+    function App(){
+      // Start empty
+      const [companies,setCompanies]=useState([]); // {ticker,name,data:{statements},years[],yearIndex,loading?,isEmpty?}
+      const [ratioDefs,setRatioDefs]=useState([
+        {numerator:"Gross Profit",denominator:"Revenue",label:"Gross Margin"},
+        {numerator:"Total Liabilities",denominator:"Equity",label:"Debt to Equity"},
+        {numerator:"Cash from Operations",denominator:"Revenue",label:"Operating Cash Flow to Sales"},
+        {numerator:"Net Income",denominator:"Equity",label:"Return on Equity"},
+      ]);
+      const [baselineIdx,setBaselineIdx]=useState(0);
+      const [showSettings,setShowSettings]=useState(false);
+      const [fmpKey,setFmpKey]=useState("");
+
+      function addTickerSlot(){ setCompanies(p=>[...p,{ticker:"",name:"",data:{statements:{}},years:[],yearIndex:0,isEmpty:true}]); }
+
+      async function replaceEmptyWith(t,at){
+        const T=t.trim().toUpperCase(); if(!T) return;
+        // optimistic loading
+        setCompanies(p=>p.map((c,i)=> i===at ? {ticker:T,name:"Loading…",data:{statements:{}},years:[],yearIndex:0,loading:true} : c));
+        try{
+          if(!fmpKey){ throw new Error("Missing API key in Settings"); }
+          const payload=await fetchFmpStatements(T,fmpKey);
+          const years=Object.keys(payload.statements||{}).map(Number).sort((a,b)=>b-a);
+          const normalized={ticker:T,name:payload.name||T,data:payload,years,yearIndex:0};
+          setCompanies(p=>p.map((c,i)=> i===at ? normalized : c));
+        }catch(e){
+          console.warn("Fetch failed", e);
+          alert(`Could not fetch ${T}. Check API key, ticker, or rate limit.`);
+          // keep slot empty so user can try again
+          setCompanies(p=>p.map((c,i)=> i===at ? {ticker:"",name:"",data:{statements:{}},years:[],yearIndex:0,isEmpty:true} : c));
+        }
+      }
+
+      function removeCompany(i){ setCompanies(p=>p.filter((_,idx)=>idx!==i)); if (baselineIdx>=i && baselineIdx>0) setBaselineIdx(b=>b-1); }
+
+      // Years are sorted newest first at index 0
+      function shiftYear(i,dir){
+        // dir < 0 back in time, dir > 0 forward in time
+        setCompanies(p=>p.map((c,idx)=>{
+          if(idx!==i) return c;
+          const max = Math.max(0, c.years.length-1);
+          const next = Math.min(Math.max(c.yearIndex + (dir<0?+1:-1), 0), max);
+          return {...c, yearIndex: next};
+        }));
+      }
+
+      function makeRatio(n,d){
+        const lbl=ratioLabel(n.label,d.label);
+        const entry={numerator:n.label,denominator:d.label,label:lbl};
+        setRatioDefs(p=>p.some(r=>r.numerator===entry.numerator && r.denominator===entry.denominator)?p:[...p,entry]);
+      }
+
+      return (
+        <div className="min-h-screen">
+          <header className="p-4 flex items-center justify-between card" style={{background:'var(--surface-0)'}}>
+            <div className="flex items-center gap-3">
+              <div className="dot-green"></div>
+              <div>
+                <div className="text-lg font-semibold tracking-wide">The Iron Vanguard</div>
+                <div className="text-[11px] subtle">Ratios Builder</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="text-[11px] subtle">Baseline</div>
+              <select className="btn px-2 py-1 text-sm" style={{background:'var(--surface-1)',borderColor:'var(--border)'}}
+                value={baselineIdx} onChange={e=>setBaselineIdx(parseInt(e.target.value))}>
+                {companies.length===0 ? <option value={0}>n/a</option>
+                  : companies.map((c,i)=><option key={i} value={i}>{c.ticker||"slot"}</option>)}
+              </select>
+              <button className="btn px-3 py-2" style={{background:'var(--surface-0)',borderColor:'var(--border)'}} onClick={()=>setShowSettings(true)}>Settings</button>
+            </div>
+          </header>
+
+          <main className="p-4 grid grid-cols-12 gap-4">
+            <section className="col-span-7 grid grid-cols-[repeat(auto-fill,minmax(360px,1fr))] gap-4 content-start">
+              {companies.map((c,idx)=>(
+                c.isEmpty
+                  ? <EmptyTickerCard key={`empty-${idx}`} onAdd={(t)=>replaceEmptyWith(t,idx)} />
+                  : <CompanyCard key={c.ticker||idx} company={c}
+                      onRemove={()=>removeCompany(idx)}
+                      onBack={()=>shiftYear(idx,-1)}
+                      onForward={()=>shiftYear(idx,+1)} />
+              ))}
+              <AddCard onClick={addTickerSlot}/>
+            </section>
+
+            <section className="col-span-5 flex flex-col gap-4">
+              <div className="card p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-sm font-semibold">Ratio Builder</div>
+                  <div className="text-[11px] subtle">Baseline: {companies[baselineIdx]?.ticker||"n/a"}</div>
+                </div>
+                <RatioBuilder onMakeRatio={makeRatio}/>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {[
+                    {n:"Gross Profit",d:"Revenue"},
+                    {n:"Net Income",d:"Revenue"},
+                    {n:"Net Income",d:"Equity"},
+                    {n:"Current Assets",d:"Current Liabilities"},
+                    {n:"Total Liabilities",d:"Equity"},
+                    {n:"Cash from Operations",d:"Revenue"},
+                  ].map(p=>(
+                    <button key={p.n+p.d} className="text-[11px] px-2 py-1 rounded-lg btn btn-ghost"
+                      style={{borderColor:'var(--border)'}}
+                      onClick={()=>makeRatio({label:p.n,value:1},{label:p.d,value:1})}>
+                      {ratioLabel(p.n,p.d)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="card p-3">
+                <CompareTable companies={companies.filter(c=>!c.isEmpty)} ratioDefs={ratioDefs} baselineIdx={baselineIdx}/>
+              </div>
+            </section>
+          </main>
+
+          {showSettings && (
+            <SettingsModal onClose={()=>setShowSettings(false)} fmpKey={fmpKey} setFmpKey={setFmpKey}/>
+          )}
+        </div>
+      );
+    }
+
+    function CompanyCard({company,onRemove,onBack,onForward}){
+      const y=company.years[company.yearIndex];
+      const s=company.data.statements[y];
+      const blocks=[
+        {title:"INCOME",data:s?.IncomeStatement},
+        {title:"BALANCE",data:s?.BalanceSheet},
+        {title:"CASH FLOW",data:s?.CashFlow},
+      ];
+      return (
+        <div className="card p-3 relative">
+          <div className="absolute right-2 top-2">
+            <button className="x-btn" title="Remove" onClick={onRemove}>×</button>
+          </div>
+
+          <div className="pr-8">
+            <div className="flex items-center justify-between mb-2">
+              <div className="font-semibold text-sm truncate pr-2" title={`${company.ticker} · ${company.name}`}>
+                {company.ticker} · {company.name}
+              </div>
+              <div className="flex items-center gap-2">
+                <IconBtn title="Back one year" onClick={onBack}>
+                  <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M15.5 19 8.5 12l7-7"/></svg>
+                </IconBtn>
+                <Tag>{y||"No Year"}</Tag>
+                <IconBtn title="Forward one year" onClick={onForward}>
+                  <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M8.5 5 15.5 12l-7 7"/></svg>
+                </IconBtn>
+              </div>
+            </div>
+
+            <div className="stmt-grid">
+              {blocks.map(b=>(
+                <div key={b.title}>
+                  <div className="text-[11px] subtle mb-1">{b.title}</div>
+                  <div className="stmt-col">
+                    {(b.data
+                      ? Object.entries(b.data).map(([k,v])=>(
+                          <LineItem key={k} label={k} value={typeof v==='number'?v:null}/>
+                        ))
+                      : [<div key="nodata" className="text-[12px] subtle p-2">No data</div>]
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function AddCard({onClick}){
+      return (
+        <button className="card p-3 h-[64px] flex items-center justify-center subtle w-full"
+          style={{background:'var(--surface-0)'}} onClick={onClick} title="Add empty ticker slot">
+          <span className="flex items-center gap-2"><span className="btn-icon btn-ghost" style={{border:'1px solid var(--border)'}}>+</span> Add ticker slot</span>
+        </button>
+      );
+    }
+
+    function EmptyTickerCard({onAdd}){
+      const [val,setVal]=useState("");
+      return (
+        <div className="card p-3 flex flex-col gap-2">
+          <div className="font-semibold text-sm">Add Ticker</div>
+          <div className="flex items-center gap-2">
+            <input value={val} onChange={e=>setVal(e.target.value)} placeholder="e.g., AAPL"
+              className="px-3 py-2 rounded-xl btn w-[160px]" style={{background:'var(--surface-0)',borderColor:'var(--border)'}}/>
+            <button className="btn btn-accent px-3 py-2" onClick={()=>{onAdd(val); setVal("");}}>+</button>
+          </div>
+          <div className="text-[11px] subtle">Requires API key in Settings.</div>
+        </div>
+      );
+    }
+
+    function LineItem({label,value}){
+      function onDragStart(e){ e.dataTransfer.setData("text/plain", JSON.stringify({label,value})); }
+      return (
+        <div className="pill pill-draggable pill-row text-[13px]" draggable onDragStart={onDragStart} title="Drag into Ratio Builder">
+          <span>{label}</span>
+          <span className="subtle tabular-nums">{value==null?"–":fmtMoney(value)}</span>
+        </div>
+      );
+    }
+
+    function DropZone({label,onDropData,filled}){
+      const [hover,setHover]=useState(false);
+      function onDrop(e){
+        e.preventDefault();
+        const raw=e.dataTransfer.getData("text/plain");
+        try{const d=JSON.parse(raw); if(typeof d.value==="number") onDropData(d);}catch{}
+        setHover(false);
+      }
+      return (
+        <div className={`dz px-3 py-3 min-h-[56px] rounded-lg ${hover?"hover":""}`}
+          onDragOver={e=>{e.preventDefault(); setHover(true);}} onDragLeave={()=>setHover(false)} onDrop={onDrop}>
+          <div className={`text-[12px] ${filled?"":"subtle"}`}>{label}</div>
+        </div>
+      );
+    }
+
+    function RatioBuilder({onMakeRatio}){
+      const [num,setNum]=useState(null);
+      const [den,setDen]=useState(null);
+      useEffect(()=>{ if(num&&den) onMakeRatio(num,den); },[num,den]);
+      return (
+        <div className="flex items-center gap-3">
+          <DropZone label={num?`Numerator: ${num.label}`:"Drop Numerator"} onDropData={setNum} filled={!!num}/>
+          <div className="subtle text-sm select-none">÷</div>
+          <DropZone label={den?`Denominator: ${den.label}`:"Drop Denominator"} onDropData={setDen} filled={!!den}/>
+          <button className="btn btn-ghost px-3 py-2" style={{borderColor:'var(--border)'}} onClick={()=>{setNum(null); setDen(null);}}>Clear</button>
+        </div>
+      );
+    }
+
+    function CompareTable({companies,ratioDefs,baselineIdx=0}){
+      function pool(c){const y=c.years[c.yearIndex]; const s=c.data.statements[y]||{}; return {...(s.IncomeStatement||{}),...(s.BalanceSheet||{}),...(s.CashFlow||{})};}
+      function val(c,def){const p=pool(c); const n=p[def.numerator], d=p[def.denominator]; if(typeof n!=="number"||typeof d!=="number"||d===0) return null; return n/d;}
+      const base=companies[baselineIdx];
+
+      return (
+        <div className="overflow-auto">
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr className="text-left border-b" style={{borderColor:'var(--border)'}}>
+                <th className="py-2 pr-3 w-[44%]">Ratio</th>
+                {companies.map((c,i)=><th key={i} className="py-2 pr-3 whitespace-nowrap w-[14%]">{c.ticker} {c.years[c.yearIndex]?`(${c.years[c.yearIndex]})`:""}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {ratioDefs.length===0
+                ? <tr><td colSpan={companies.length+1} className="py-3 subtle">Define a ratio by dragging items, or use the quick buttons.</td></tr>
+                : ratioDefs.map((r,ri)=>{
+                    const vals=companies.map(c=>val(c,r));
+                    const baseVal=base?val(base,r):null;
+                    let bestIdx=-1, bestVal=null;
+                    vals.forEach((v,i)=>{ if(v==null) return; if(bestVal==null){bestVal=v; bestIdx=i; return;} const better=higherIsBetter(r.label)?v>bestVal:v<bestVal; if(better){bestVal=v; bestIdx=i;} });
+                    return (
+                      <tr key={ri} className="border-b" style={{borderColor:'var(--border)'}}>
+                        <td className="py-2 pr-3 align-top">
+                          <div className="font-medium">{r.label}</div>
+                          <div className="text-[11px] subtle">{r.numerator} / {r.denominator}</div>
+                        </td>
+                        {companies.map((c,i)=>{
+                          const v=vals[i];
+                          const isPct=/Margin|Return|to Sales|FCF/i.test(r.label);
+                          const txt=v==null?"–":isPct?`${(v*100).toFixed(1)}%`:v.toFixed(2);
+                          let badge=null, color="";
+                          if(baseVal!=null && v!=null && i!==baselineIdx && Math.abs(baseVal)>0){
+                            const diff=((v-baseVal)/Math.abs(baseVal))*100;
+                            const better=higherIsBetter(r.label)?diff>0:diff<0;
+                            badge=`${diff>=0?"+":""}${diff.toFixed(1)}%`;
+                            color=better?"var(--accent)":"#c0392b";
+                          }
+                          const best=i===bestIdx && v!=null;
+                          return (
+                            <td key={i} className="py-2 pr-3 tabular-nums align-top">
+                              <div className={`inline-block px-2 py-1 rounded-md ${best?"outline-best":""}`}>
+                                <span>{txt}</span>
+                                {badge && <span className="ml-1 text-[11px]" style={{color}}>({badge})</span>}
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    function SettingsModal({onClose,fmpKey,setFmpKey}){
+      return (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4">
+          <div className="card max-w-3xl w-full p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="font-semibold">Settings</div>
+              <button className="btn px-3 py-1" style={{background:'var(--surface-0)',borderColor:'var(--border)'}} onClick={onClose}>Close</button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <div className="text-sm font-semibold mb-1">Live data API key</div>
+                <div className="text-[11px] subtle mb-2">Enter your FMP key to enable client fetches.</div>
+                <input value={fmpKey} onChange={e=>setFmpKey(e.target.value)} placeholder="FMP API key"
+                  className="px-3 py-2 rounded-xl btn w-full" style={{background:'var(--surface-0)',borderColor:'var(--border)'}}/>
+                <div className="text-[11px] subtle mt-2">Stored only in memory for this page.</div>
+              </div>
+              <div>
+                <div className="text-sm font-semibold mb-1">How to use</div>
+                <div className="text-[12px] subtle">Click “Add ticker slot”, type a symbol like AAPL or MSFT, then +. Use arrows to flip years on each card. Drag pills to build ratios.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const root=ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App/>);
+  </script>
+</body>
+</html>
