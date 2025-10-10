@@ -166,14 +166,38 @@
     const Tag=({children})=><span className="px-2 py-0.5 rounded-full text-[11px] subtle border" style={{borderColor:'var(--border)'}}>{children}</span>;
     const IconBtn=({onClick, title, children})=><button className="btn btn-ghost btn-icon" style={{borderColor:'var(--border)'}} title={title} onClick={onClick}>{children}</button>;
 
-    /* fetch helpers */
+    // simple request log 
+    const DEBUG = new (class {
+      list = [];
+      push(x){ this.list = [...this.list, x]; console.debug("[AV]", x); }
+    })();
+    
     async function fetchJson(u){
+      const t0 = Date.now();
       const r = await fetch(u, { cache: 'no-store' });
-      if(!r.ok) throw new Error(`HTTP ${r.status}`);
-      const j = await r.json();
-      if (j.Note || j['Error Message']) throw new Error('Provider limit or key error');
+      const txt = await r.text();
+      let j = null;
+      try { j = JSON.parse(txt); } catch {}
+    
+      DEBUG.push({
+        url: u, status: r.status, ms: Date.now()-t0,
+        avNote: j?.Note, avInfo: j?.Information, avErr: j?.["Error Message"],
+        proxyErr: j?.error, proxyDetail: j?.detail
+      });
+    
+      if (!r.ok) {
+        const msg = j?.error || `HTTP ${r.status}`;
+        const detail = j?.detail || j?.["Error Message"] || j?.Note || j?.Information;
+        throw new Error(detail ? `${msg}: ${detail}` : msg);
+      }
+      if (j?.Note || j?.Information || j?.["Error Message"]) {
+        // defensive: should not happen now that proxy maps to !ok
+        const detail = j.Note || j.Information || j["Error Message"];
+        throw new Error(detail);
+      }
       return j;
     }
+
     const mem = new Map();
     function cached(key, loader){
       if (mem.has(key)) return mem.get(key);
@@ -388,7 +412,7 @@
       );
     }
 
-    function CompanyCard({company,isBaseline,onRemove,onBack,onForward,highlightKeys}){
+    function CompanyCard({company,isBaseline,onRemove,onBack,onForward,highlightKeys,onRetry}){
       const y=company.years[company.yearIndex];
       const s=(company.data && company.data.statements) ? company.data.statements[y] : null;
       const inc = s && s.IncomeStatement ? s.IncomeStatement : null;
@@ -416,6 +440,18 @@
                 <IconBtn title="Forward one year" onClick={onForward}><svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M8.5 5 15.5 12l-7 7"/></svg></IconBtn>
               </div>
             </div>
+            {company.error && (
+              <div className="mb-2 text-[12px] p-2 rounded-md"
+                   style={{background:"rgba(227,93,106,.12)", border:"1px solid #e35d6a"}}>
+                <div className="font-medium" style={{color:"#e35d6a"}}>Data error</div>
+                <div className="mt-0.5 subtle">{company.error}</div>
+                <button className="mt-2 btn btn-ghost px-2 py-1"
+                        style={{borderColor:'var(--border)'}}
+                        onClick={onRetry}>
+                  Retry
+                </button>
+              </div>
+            )}
             <div className="stmt-grid">
               {blocks.map(b=>(
                 <div key={b.title}>
@@ -613,18 +649,22 @@
         setCompanies(p=>[...p,{ticker:"",name:"",data:{statements:{}},years:[],yearIndex:0,isEmpty:true}]);
       }
       async function replaceEmptyWith(t,at){
-        const T=(t||"").trim().toUpperCase(); if(!T) return;
-        setCompanies(p=>p.map((c,i)=> i===at ? {ticker:T,name:"Loading...",data:{statements:{}},years:[],yearIndex:0,loading:true} : c));
-        try{
-          const payload=await fetchStatements(T);
-          const years=Object.keys(payload.statements||{}).map(Number).sort((a,b)=>b-a);
-          const normalized={ticker:T,name:payload.name||T,data:payload,years,yearIndex:0};
-          setCompanies(p=>p.map((c,i)=> i===at ? normalized : c));
-        }catch(_e){
-          alert(`Could not fetch ${T}. Try later.`);
-          setCompanies(p=>p.map((c,i)=> i===at ? {ticker:"",name:"",data:{statements:{}},years:[],yearIndex:0,isEmpty:true} : c));
-        }
+      const T=(t||"").trim().toUpperCase(); if(!T) return;
+      setCompanies(p=>p.map((c,i)=> i===at ? {ticker:T,name:"Loading...",data:{statements:{}},years:[],yearIndex:0,loading:true} : c));
+      try{
+        const payload=await fetchStatements(T);
+        const years=Object.keys(payload.statements||{}).map(Number).sort((a,b)=>b-a);
+        const normalized={ticker:T,name:payload.name||T,data:payload,years,yearIndex:0,error:null};
+        setCompanies(p=>p.map((c,i)=> i===at ? normalized : c));
+      }catch(e){
+        // keep the card, show the provider/ proxy error, allow retry
+        setCompanies(p=>p.map((c,i)=> i===at
+          ? { ticker:T, name:T, data:{statements:{}}, years:[], yearIndex:0, error:String(e), isEmpty:false }
+          : c
+        ));
       }
+    }
+
       function removeCompany(i){
         setCompanies(p=>{
           const out = p.filter((_,idx)=>idx!==i);
@@ -723,17 +763,30 @@
               {companies.map((c,idx)=>(
                 c.isEmpty
                   ? <EmptyTickerCard key={`empty-${idx}`} onAdd={(t)=>replaceEmptyWith(t,idx)} />
-                  : <CompanyCard key={c.ticker||idx} company={c}
+                  : <CompanyCard
+                      key={c.ticker||idx}
+                      company={c}
                       isBaseline={idx===baselineIdx}
                       onRemove={()=>removeCompany(idx)}
                       onBack={()=>shiftYear(idx,-1)}
                       onForward={()=>shiftYear(idx,+1)}
                       highlightKeys={idx===baselineIdx ? highlightSet : null}
+                      onRetry={()=>replaceEmptyWith(c.ticker, idx)}
                     />
               ))}
+
               <AddCard onClick={addTickerSlot}/>
             </section>
           </main>
+          <div className="fixed bottom-4 right-4">
+            <details className="card p-3 w-[320px] max-h-[40vh] overflow-y-auto">
+              <summary className="cursor-pointer text-sm">Debug (requests)</summary>
+              <pre className="text-[11px] whitespace-pre-wrap">
+                {JSON.stringify(DEBUG.list, null, 2)}
+              </pre>
+            </details>
+          </div>
+
 
           <footer className="px-4 pb-6 text-[11px] subtle text-center">
             Created for MBA520 at University of Victoria, Class of 2025, THE IRON VANGUARD team. Financial information sourced from Alpha Vantage.
@@ -747,6 +800,7 @@
   </script>
 </body>
 </html>
+
 
 
 
