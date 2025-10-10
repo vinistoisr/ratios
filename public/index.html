@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>The Iron Vanguard · Ratios Builder</title>
 
-  <!-- Tailwind CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     :root {
@@ -31,7 +30,6 @@
     .btn-accent{background:var(--accent); color:#0b0f14}
     .btn-icon{width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border-radius:8px}
     .dot-green{background:var(--accent); width:32px; height:32px; border-radius:10px}
-    .outline-green{outline:2px solid var(--accent); outline-offset:2px; border-radius:10px}
     .outline-best{outline:2px solid var(--accent); outline-offset:2px; border-radius:10px}
     .dz{background:var(--dropzone); border:2px dashed var(--border); border-radius:14px}
     .dz.hover{border-color:var(--accent); background:#0e1a13}
@@ -40,9 +38,12 @@
     .stmt-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:12px}
     .stmt-col{display:grid; grid-auto-rows:minmax(40px,auto); gap:10px}
     .pill-row{display:flex; align-items:center; justify-content:space-between; padding:8px 12px}
+    /* new, subtler baseline highlights */
+    .baseline-card{border-left:4px solid var(--accent);}
+    .th-baseline{border-bottom:3px solid var(--accent);}
+    .chip-baseline{font-size:10px; padding:2px 6px; background:var(--surface-2); border:1px solid var(--border); border-radius:999px; margin-left:8px;}
   </style>
 
-  <!-- React 18 UMD + Babel -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -53,22 +54,18 @@
   <script type="text/babel">
     const {useEffect, useState} = React;
 
-    // config
     const DEFAULT_ALPHA_KEY = '5JN5SW5DG1LG9CCC';
     const AV_BASE = 'https://www.alphavantage.co/query';
 
-    // key storage
     const getApiKey = () => (localStorage.getItem('alpha_apikey') || '').trim();
     const setApiKey = k => localStorage.setItem('alpha_apikey', k.trim());
     if (!getApiKey()) setApiKey(DEFAULT_ALPHA_KEY);
 
-    // theme storage
     const getTheme = () => localStorage.getItem('iv_theme') || 'dark';
     const applyTheme = t => document.documentElement.setAttribute('data-theme', t);
     const setTheme = t => { localStorage.setItem('iv_theme', t); applyTheme(t); };
     applyTheme(getTheme());
 
-    // labels
     const KNOWN = {
       "Gross Profit/Revenue":"Gross Margin",
       "Net Income/Revenue":"Net Margin",
@@ -93,7 +90,6 @@
     const Tag=({children})=><span className="px-2 py-0.5 rounded-full text-[11px] subtle border" style={{borderColor:'var(--border)'}}>{children}</span>;
     const IconBtn=({onClick, title, children})=><button className="btn btn-ghost btn-icon" style={{borderColor:'var(--border)'}} title={title} onClick={onClick}>{children}</button>;
 
-    // fetch
     async function fetchJson(u){
       const r = await fetch(u, { cache: 'no-store' });
       if(!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -129,7 +125,6 @@
       }
       for (const row of bs.annualReports || []) {
         const y = Number(row.fiscalDateEnding?.slice(0,4)); if (!y) continue;
-        out.statements[y] ||= { IncomeStatement:{}, BalanceSheet:{}, CashFlow:{} };
         out.statements[y].BalanceSheet = {
           "Total Assets":+row.totalAssets||0,
           "Total Liabilities":+row.totalLiabilities||0,
@@ -140,28 +135,22 @@
       }
       for (const row of cf.annualReports || []) {
         const y = Number(row.fiscalDateEnding?.slice(0,4)); if (!y) continue;
-        out.statements[y] ||= { IncomeStatement:{}, BalanceSheet:{}, CashFlow:{} };
         const op = +row.operatingCashflow||0;
         const capex = +row.capitalExpenditures||0;
-        out.statements[y].CashFlow = {
-          "Cash from Operations":op,
-          CapEx:capex,
-          "Free Cash Flow":op+capex,
-        };
+        out.statements[y] ||= { IncomeStatement:{}, BalanceSheet:{}, CashFlow:{} };
+        out.statements[y].CashFlow = { "Cash from Operations":op, CapEx:capex, "Free Cash Flow":op+capex };
       }
       return out;
     }
-
     async function fetchStatements(ticker){
       const [is, bs, cf, ov] = await Promise.all([avIncome(ticker), avBalance(ticker), avCash(ticker), avOverview(ticker)]);
       return mapFromAV(ticker, is, bs, cf, ov);
     }
 
-    // App
     function App(){
-      const [companies,setCompanies]=useState([]);        // array of slots, some empty
-      const [ratioDefs,setRatioDefs]=useState([]);        // user created
-      const [baselineIdx,setBaselineIdx]=useState(0);     // index in original companies array
+      const [companies,setCompanies]=useState([]);
+      const [ratioDefs,setRatioDefs]=useState([]);
+      const [baselineIdx,setBaselineIdx]=useState(0);
       const [showSettings,setShowSettings]=useState(false);
       const [alphaKeyUI,setAlphaKeyUI]=useState(getApiKey());
       const [themeUI,setThemeUI]=useState(getTheme());
@@ -169,7 +158,6 @@
       function addTickerSlot(){
         setCompanies(p=>[...p,{ticker:"",name:"",data:{statements:{}},years:[],yearIndex:0,isEmpty:true}]);
       }
-
       async function replaceEmptyWith(t,at){
         const T=t.trim().toUpperCase(); if(!T) return;
         setCompanies(p=>p.map((c,i)=> i===at ? {ticker:T,name:"Loading...",data:{statements:{}},years:[],yearIndex:0,loading:true} : c));
@@ -183,40 +171,33 @@
           setCompanies(p=>p.map((c,i)=> i===at ? {ticker:"",name:"",data:{statements:{}},years:[],yearIndex:0,isEmpty:true} : c));
         }
       }
-
       function removeCompany(i){
         setCompanies(p=>{
           const out = p.filter((_,idx)=>idx!==i);
-          if (baselineIdx===i) {
-            // baseline removed, reset to first slot if exists
-            if (out.length>0) setBaselineIdx(0);
-          } else if (baselineIdx>i) {
-            setBaselineIdx(b=>b-1);
-          }
+          if (baselineIdx===i && out.length>0) setBaselineIdx(0);
+          else if (baselineIdx>i) setBaselineIdx(b=>b-1);
           return out;
         });
       }
-
       function shiftYear(i,dir){
         setCompanies(p=>p.map((c,idx)=>{
           if(idx!==i) return c;
-          const max = Math.max(0, c.years.length-1);
-          const next = Math.min(Math.max(c.yearIndex + (dir<0?+1:-1), 0), max);
-          return {...c, yearIndex: next};
+          const max=Math.max(0,c.years.length-1);
+          const next=Math.min(Math.max(c.yearIndex+(dir<0?+1:-1),0),max);
+          return {...c,yearIndex:next};
         }));
       }
-
       function makeRatio(n,d){
         const lbl=ratioLabel(n.label,d.label);
         const entry={numerator:n.label,denominator:d.label,label:lbl};
         setRatioDefs(p=>p.some(r=>r.numerator===entry.numerator && r.denominator===entry.denominator)?p:[...p,entry]);
       }
 
-      // build filled list with original index mapping for table clicks
-      const filled = companies.flatMap((c,i)=> c.isEmpty ? [] : [{...c, _idx:i}]);
+      const filled = companies.flatMap((c,i)=> c.isEmpty ? [] : [{...c,_idx:i}]);
 
       return (
         <div className="min-h-screen">
+          {/* Header */}
           <header className="p-4 flex items-center justify-between card" style={{background:'var(--surface-0)'}}>
             <div className="flex items-center gap-3">
               <div className="dot-green"></div>
@@ -237,8 +218,20 @@
             </div>
           </header>
 
-          <main className="p-4 grid grid-cols-12 gap-4">
-            <section className="col-span-7 grid grid-cols-[repeat(auto-fill,minmax(360px,1fr))] gap-4 content-start">
+          {/* Ratio Builder at the very top, full width */}
+          <section className="p-4">
+            <div className="card p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-semibold">Ratio Builder</div>
+                <div className="text-[11px] subtle">Baseline: {companies[baselineIdx]?.ticker||"n/a"}</div>
+              </div>
+              <RatioBuilder onMakeRatio={makeRatio}/>
+            </div>
+          </section>
+
+          {/* Below it: company grid 3-across, then compare table full width */}
+          <main className="px-4 pb-4 flex flex-col gap-4">
+            <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {companies.map((c,idx)=>(
                 c.isEmpty
                   ? <EmptyTickerCard key={`empty-${idx}`} onAdd={(t)=>replaceEmptyWith(t,idx)} />
@@ -251,23 +244,13 @@
               <AddCard onClick={addTickerSlot}/>
             </section>
 
-            <section className="col-span-5 flex flex-col gap-4">
-              <div className="card p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-sm font-semibold">Ratio Builder</div>
-                  <div className="text-[11px] subtle">Baseline: {companies[baselineIdx]?.ticker||"n/a"}</div>
-                </div>
-                <RatioBuilder onMakeRatio={makeRatio}/>
-              </div>
-
-              <div className="card p-3">
-                <CompareTable
-                  items={filled}                   /* list with original indices */
-                  ratioDefs={ratioDefs}
-                  baselineIdx={baselineIdx}        /* baseline in original index space */
-                  setBaselineIdx={setBaselineIdx}  /* setter in original index space */
-                />
-              </div>
+            <section className="card p-3">
+              <CompareTable
+                items={filled}
+                ratioDefs={ratioDefs}
+                baselineIdx={baselineIdx}
+                setBaselineIdx={setBaselineIdx}
+              />
             </section>
           </main>
 
@@ -275,8 +258,8 @@
             <SettingsModal
               onClose={()=>setShowSettings(false)}
               keyUI={alphaKeyUI}
-              themeUI={getTheme()}
-              onSave={(k,t)=>{ setAlphaKeyUI(k); setApiKey(k); setThemeUI(t); setTheme(t); }}
+              themeUI={themeUI}
+              onSave={(k,t)=>{ setAlphaKeyUI(k); setApiKey(k); setThemeUI(t); setTheme(t); setShowSettings(false); }}
             />
           )}
         </div>
@@ -292,7 +275,7 @@
         {title:"CASH FLOW",data:s?.CashFlow},
       ];
       return (
-        <div className={`card p-3 relative ${isBaseline?'outline-green':''}`}>
+        <div className={`card p-3 relative ${isBaseline?'baseline-card':''}`}>
           <div className="absolute right-2 top-2">
             <button className="x-btn" title="Remove" onClick={onRemove}>×</button>
           </div>
@@ -300,6 +283,7 @@
             <div className="flex items-center justify-between mb-2">
               <div className="font-semibold text-sm truncate pr-2" title={`${company.ticker} · ${company.name || company.ticker}`}>
                 {company.name || company.ticker} <span className="subtle">({company.ticker})</span>
+                {isBaseline && <span className="chip-baseline">Baseline</span>}
               </div>
               <div className="flex items-center gap-2">
                 <IconBtn title="Back one year" onClick={onBack}><svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M15.5 19 8.5 12l7-7"/></svg></IconBtn>
@@ -333,7 +317,6 @@
         </button>
       );
     }
-
     function EmptyTickerCard({onAdd}){
       const [val,setVal]=useState("");
       return (
@@ -348,7 +331,6 @@
         </div>
       );
     }
-
     function LineItem({label,value}){
       function onDragStart(e){ e.dataTransfer.setData("text/plain", JSON.stringify({label,value})); }
       return (
@@ -374,7 +356,6 @@
         </div>
       );
     }
-
     function RatioBuilder({onMakeRatio}){
       const [num,setNum]=useState(null);
       const [den,setDen]=useState(null);
@@ -401,7 +382,6 @@
         if(typeof n!=="number"||typeof d!=="number"||d===0) return null;
         return n/d;
       }
-
       const baseItem = items.find(it => it._idx === baselineIdx);
       const baseValFor = r => baseItem ? val(baseItem, r) : null;
 
@@ -413,10 +393,10 @@
                 <th className="py-2 pr-3 w-[44%]">Ratio</th>
                 {items.map((it)=>(
                   <th key={it._idx}
-                      className={`py-2 pr-3 whitespace-nowrap w-[14%] cursor-pointer ${it._idx===baselineIdx?'outline-green':''}`}
-                      title="Click to set as baseline"
+                      className={`py-2 pr-3 whitespace-nowrap w-[14%] cursor-pointer ${it._idx===baselineIdx?'th-baseline':''}`}
+                      title={`${it.name || it.ticker}`}
                       onClick={()=>setBaselineIdx(it._idx)}>
-                    {it.name || it.ticker} <span className="subtle">({it.ticker})</span> {it.years[it.yearIndex]?`(${it.years[it.yearIndex]})`:""}
+                    {it.ticker} {it.years[it.yearIndex]?`(${it.years[it.yearIndex]})`:""}
                   </th>
                 ))}
               </tr>
@@ -467,8 +447,12 @@
 
     function SettingsModal({onClose,keyUI,themeUI,onSave}){
       const [val,setVal]=useState(keyUI||"");
+      const [masked,setMasked]=useState(true);
       const [theme,setThemeLocal]=useState(themeUI||"dark");
       useEffect(()=>{ applyTheme(theme); },[theme]);
+
+      const mask = s => s ? s.replace(/.(?=.{4})/g,"•") : "";
+
       return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4">
           <div className="card max-w-3xl w-full p-4">
@@ -476,13 +460,29 @@
               <div className="font-semibold">Settings</div>
               <button className="btn px-3 py-1" style={{background:'var(--surface-0)',borderColor:'var(--border)'}} onClick={onClose}>Close</button>
             </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <div className="text-sm font-semibold mb-1">Live data API key</div>
-                <div className="text-[11px] subtle mb-2">Alpha Vantage key. Stored in localStorage.</div>
-                <input value={val} onChange={e=>setVal(e.target.value)} placeholder="Alpha Vantage API key"
-                  className="px-3 py-2 rounded-xl btn w-full" style={{background:'var(--surface-0)',borderColor:'var(--border)'}}/>
-                <div className="mt-3">
+                <div className="text-[11px] subtle mb-2">Alpha Vantage key, stored in localStorage.</div>
+
+                <div className="flex gap-2 items-center">
+                  <input
+                    type={masked ? "password" : "text"}
+                    value={val}
+                    onChange={e=>setVal(e.target.value)}
+                    placeholder="Alpha Vantage API key"
+                    className="px-3 py-2 rounded-xl btn w-full"
+                    style={{background:'var(--surface-0)',borderColor:'var(--border)'}}
+                  />
+                  <button className="btn px-3 py-2" style={{background:'var(--surface-0)',borderColor:'var(--border)'}}
+                          onClick={()=>setMasked(m=>!m)}>
+                    {masked ? "Show" : "Hide"}
+                  </button>
+                </div>
+                <div className="text-[11px] subtle mt-1">Saved: {mask(getApiKey())}</div>
+
+                <div className="mt-4">
                   <div className="text-sm font-semibold mb-1">Theme</div>
                   <select className="btn px-2 py-1 text-sm"
                           style={{background:'var(--surface-1)',borderColor:'var(--border)'}}
@@ -492,10 +492,12 @@
                     <option value="light">Light</option>
                   </select>
                 </div>
-                <div className="mt-3 flex gap-2">
+
+                <div className="mt-4 flex gap-2">
                   <button className="btn btn-accent px-3 py-2" onClick={()=>onSave(val,theme)}>Save</button>
                 </div>
               </div>
+
               <div>
                 <div className="text-sm font-semibold mb-1">How to use</div>
                 <div className="text-[12px] subtle">Add a ticker, save your key, build ratios with the plus button. Click a column header to set baseline.</div>
