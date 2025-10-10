@@ -4,6 +4,8 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>The Iron Vanguard · Ratios Builder</title>
+  <link rel="icon" href="/logo.png">
+  <link rel="preload" as="image" href="/logo.png">
 
   <!-- Tailwind CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -496,12 +498,20 @@
         <div className="min-h-screen">
           <header className="p-4 flex items-center justify-between card" style={{background:'var(--surface-0)'}}>
             <div className="flex items-center gap-3">
-              <div className="dot-green"></div>
-              <div>
-                <div className="text-lg font-semibold tracking-wide">The Iron Vanguard</div>
-                <div className="text-[11px] subtle">Ratios Builder</div>
-              </div>
-            </div>
+              <img
+                src="logo.png"
+                alt="Iron Vanguard logo"
+                className="h-10 w-10 rounded-md object-contain"
+                height="40"
+                width="40"
+                loading="eager"
+                decoding="async"
+              />
+          <div>
+            <div className="text-lg font-semibold tracking-wide">The Iron Vanguard</div>
+            <div className="text-[11px] subtle">Ratios Builder</div>
+          </div>
+        </div>
             <div className="flex items-center gap-3">
               <div className="text-[11px] subtle">Baseline</div>
               <select className="btn px-2 py-1 text-sm" style={{background:'var(--surface-1)',borderColor:'var(--border)'}}
@@ -563,3 +573,4 @@
   </script>
 </body>
 </html>
+
