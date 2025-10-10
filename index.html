@@ -54,13 +54,9 @@
     const {useEffect, useState} = React;
 
     // config
-    const DEFAULT_ALPHA_KEY = '5JN5SW5DG1LG9CCC';
-    const AV_BASE = 'https://www.alphavantage.co/query';
+    const AV_BASE = '/api/alpha';
+    const symKey = s => (s || "").trim().toUpperCase();
 
-    // key storage
-    const getApiKey = () => (localStorage.getItem('alpha_apikey') || '').trim();
-    const setApiKey = k => localStorage.setItem('alpha_apikey', k.trim());
-    if (!getApiKey()) setApiKey(DEFAULT_ALPHA_KEY);
 
     // theme storage
     const getTheme = () => localStorage.getItem('iv_theme') || 'dark';
@@ -108,12 +104,14 @@
       mem.set(key, p);
       return p;
     }
-    const avUrl = (fn, sym, key) => `${AV_BASE}?function=${fn}&symbol=${encodeURIComponent(sym)}&apikey=${encodeURIComponent(key)}`;
-    const avIncome   = sym => cached(`IS:${sym}`, () => fetchJson(avUrl('INCOME_STATEMENT', sym, getApiKey())));
-    const avBalance  = sym => cached(`BS:${sym}`, () => fetchJson(avUrl('BALANCE_SHEET', sym, getApiKey())));
-    const avCash     = sym => cached(`CF:${sym}`, () => fetchJson(avUrl('CASH_FLOW', sym, getApiKey())));
-    const avOverview = sym => cached(`OV:${sym}`, () => fetchJson(avUrl('OVERVIEW', sym, getApiKey())));
 
+    const avUrl = (fn, sym) => `${AV_BASE}?function=${fn}&symbol=${encodeURIComponent(symKey(sym))}`;
+    const avIncome   = sym => cached(`IS:${symKey(sym)}`, () => fetchJson(avUrl('INCOME_STATEMENT', sym)));
+    const avBalance  = sym => cached(`BS:${symKey(sym)}`, () => fetchJson(avUrl('BALANCE_SHEET', sym)));
+    const avCash     = sym => cached(`CF:${symKey(sym)}`, () => fetchJson(avUrl('CASH_FLOW', sym)));
+    const avOverview = sym => cached(`OV:${symKey(sym)}`, () => fetchJson(avUrl('OVERVIEW', sym)));
+
+    
     function mapFromAV(ticker, is, bs, cf, ov){
       const out = { name: ov?.Name || ticker, statements: {} };
       for (const row of is.annualReports || []) {
@@ -163,7 +161,6 @@
       const [ratioDefs,setRatioDefs]=useState([]);        // user created
       const [baselineIdx,setBaselineIdx]=useState(0);     // index in original companies array
       const [showSettings,setShowSettings]=useState(false);
-      const [alphaKeyUI,setAlphaKeyUI]=useState(getApiKey());
       const [themeUI,setThemeUI]=useState(getTheme());
 
       function addTickerSlot(){
@@ -274,7 +271,6 @@
           {showSettings && (
             <SettingsModal
               onClose={()=>setShowSettings(false)}
-              keyUI={alphaKeyUI}
               themeUI={themeUI}
               onSave={(k,t)=>{ setAlphaKeyUI(k); setApiKey(k); setThemeUI(t); setTheme(t); }}
             />
@@ -344,7 +340,6 @@
               className="px-3 py-2 rounded-xl btn w-[160px]" style={{background:'var(--surface-0)',borderColor:'var(--border)'}}/>
             <button className="btn btn-accent px-3 py-2" onClick={()=>{onAdd(val); setVal("");}}>+</button>
           </div>
-          <div className="text-[11px] subtle">Requires API key in Settings.</div>
         </div>
       );
     }
@@ -465,50 +460,58 @@
       );
     }
 
-    function SettingsModal({onClose,keyUI,themeUI,onSave}){
-      const [val,setVal]=useState(keyUI||"");
-      const [theme,setThemeLocal]=useState(themeUI||"dark");
-      useEffect(()=>{ applyTheme(theme); },[theme]);
-      return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4">
-          <div className="card max-w-3xl w-full p-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="font-semibold">Settings</div>
-              <button className="btn px-3 py-1" style={{background:'var(--surface-0)',borderColor:'var(--border)'}} onClick={onClose}>Close</button>
+function SettingsModal({ onClose, themeUI, onSave }) {
+  const [theme, setThemeLocal] = React.useState(themeUI || "dark");
+  React.useEffect(() => { applyTheme(theme); }, [theme]);
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4">
+      <div className="card max-w-3xl w-full p-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="font-semibold">Settings</div>
+          <button className="btn px-3 py-1"
+                  style={{background:'var(--surface-0)',borderColor:'var(--border)'}}
+                  onClick={onClose}>
+            Close
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <div className="text-sm font-semibold mb-1">Theme</div>
+            <select className="btn px-2 py-1 text-sm"
+                    style={{background:'var(--surface-1)',borderColor:'var(--border)'}}
+                    value={theme}
+                    onChange={e=>setThemeLocal(e.target.value)}>
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+            </select>
+
+            <div className="mt-4 flex gap-2">
+              <button className="btn btn-accent px-3 py-2"
+                      onClick={()=>{ onSave(theme); onClose(); }}>
+                Save
+              </button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <div className="text-sm font-semibold mb-1">Live data API key</div>
-                <div className="text-[11px] subtle mb-2">Alpha Vantage key. Stored in localStorage.</div>
-                <input value={val} onChange={e=>setVal(e.target.value)} placeholder="Alpha Vantage API key"
-                  className="px-3 py-2 rounded-xl btn w-full" style={{background:'var(--surface-0)',borderColor:'var(--border)'}}/>
-                <div className="mt-3">
-                  <div className="text-sm font-semibold mb-1">Theme</div>
-                  <select className="btn px-2 py-1 text-sm"
-                          style={{background:'var(--surface-1)',borderColor:'var(--border)'}}
-                          value={theme}
-                          onChange={e=>setThemeLocal(e.target.value)}>
-                    <option value="dark">Dark</option>
-                    <option value="light">Light</option>
-                  </select>
-                </div>
-                <div className="mt-3 flex gap-2">
-                  <button className="btn btn-accent px-3 py-2" onClick={()=>{ onSave(val,theme); onClose(); }}>Save</button>
-                </div>
-              </div>
-              <div>
-                <div className="text-sm font-semibold mb-1">How to use</div>
-                <div className="text-[12px] subtle">Add a ticker, save your key, build ratios with the plus button. Click a column header to set baseline.</div>
-              </div>
+          </div>
+
+          <div>
+            <div className="text-sm font-semibold mb-1">How to use</div>
+            <div className="text-[12px] subtle">
+              Add a ticker, build ratios with the plus button. Click a column header to set baseline.
             </div>
           </div>
         </div>
-      );
-    }
+      </div>
+    </div>
+  );
+}
+
 
     const root=ReactDOM.createRoot(document.getElementById("root"));
     root.render(<App/>);
   </script>
 </body>
 </html>
+
 
