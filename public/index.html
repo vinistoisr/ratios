@@ -693,22 +693,16 @@
           </header>
 
           {/* top row: builder left, results right */}
-          <section className="p-4">
+          <section className="p-4 mb-6 relative z-0">
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-              {/* LEFT: Builder + AI stacked */}
               <div className="xl:col-span-6 flex flex-col gap-4 min-h-0">
-                <RatioBuilder onMakeRatio={makeRatio}/>
-                {/* The wrapper height controls how tall the AI panel is */}
+                <RatioBuilder onMakeRatio={makeRatio} />
+                {/* fixed-height wrapper so the panel never grows into the next section */}
                 <div className="min-h-0 h-[18rem] md:h-[16rem] lg:h-[14rem]">
-                  <AiPanel
-                    items={filled}
-                    ratioDefs={ratioDefs}
-                    baselineIdx={baselineIdx}
-                  />
+                  <AiPanel items={filled} ratioDefs={ratioDefs} baselineIdx={baselineIdx} />
                 </div>
               </div>
           
-              {/* RIGHT: Ratio table fills the column */}
               <div className="xl:col-span-6 min-h-0">
                 <CompareTable
                   items={filled}
@@ -723,7 +717,7 @@
           </section>
 
 
-          <main className="px-4 pb-4">
+          <main className="px-4 pb-4 relative z-10">
             <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {companies.map((c,idx)=>(
                 c.isEmpty
@@ -752,6 +746,7 @@
   </script>
 </body>
 </html>
+
 
 
 
