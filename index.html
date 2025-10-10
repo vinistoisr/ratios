@@ -61,8 +61,8 @@
     if (!getApiKey()) setApiKey(DEFAULT_ALPHA_KEY);
 
     const getTheme = () => localStorage.getItem('iv_theme') || 'dark';
+    const applyTheme = t => document.documentElement.setAttribute('data-theme', t);
     const setTheme = t => { localStorage.setItem('iv_theme', t); applyTheme(t); };
-    function applyTheme(t){ document.documentElement.setAttribute('data-theme', t); }
     applyTheme(getTheme());
 
     const KNOWN = {
@@ -77,7 +77,7 @@
     };
 
     const fmtMoney = n=>{
-      if (n==null || Number.isNaN(n)) return "–";
+      if (n==null || Number.isNaN(n)) return "N/A";
       const a=Math.abs(n);
       const unit=a>=1e9?"B":a>=1e6?"M":a>=1e3?"K":"";
       const base=unit==="B"?n/1e9:unit==="M"?n/1e6:unit==="K"?n/1e3:n;
@@ -169,12 +169,14 @@
     function App(){
       const [companies,setCompanies]=useState([]);
       const [ratioDefs,setRatioDefs]=useState([]); // start empty
-      const [baselineIdx,setBaselineIdx]=useState(0);
+      const [baselineIdx,setBaselineIdx]=useState(0); // index in the ORIGINAL companies array
       const [showSettings,setShowSettings]=useState(false);
       const [alphaKeyUI,setAlphaKeyUI]=useState(getApiKey());
-      const [theme,setThemeUI]=useState(getTheme());
+      const [themeUI,setThemeUI]=useState(getTheme());
 
-      function addTickerSlot(){ setCompanies(p=>[...p,{ticker:"",name:"",data:{statements:{}},years:[],yearIndex:0,isEmpty:true}]); }
+      function addTickerSlot(){
+        setCompanies(p=>[...p,{ticker:"",name:"",data:{statements:{}},years:[],yearIndex:0,isEmpty:true}]);
+      }
 
       async function replaceEmptyWith(t,at){
         const T=t.trim().toUpperCase(); if(!T) return;
@@ -190,7 +192,14 @@
         }
       }
 
-      function removeCompany(i){ setCompanies(p=>p.filter((_,idx)=>idx!==i)); if (baselineIdx>=i && baselineIdx>0) setBaselineIdx(b=>b-1); }
+      function removeCompany(i){
+        setCompanies(p=>{
+          const out = p.filter((_,idx)=>idx!==i);
+          if (baselineIdx===i) return out.length ? out : [];
+          if (baselineIdx>i) setBaselineIdx(b=>b-1);
+          return out;
+        });
+      }
 
       function shiftYear(i,dir){
         setCompanies(p=>p.map((c,idx)=>{
@@ -206,6 +215,9 @@
         const entry={numerator:n.label,denominator:d.label,label:lbl};
         setRatioDefs(p=>p.some(r=>r.numerator===entry.numerator && r.denominator===entry.denominator)?p:[...p,entry]);
       }
+
+      // Build a filled list with original indices for accurate baseline mapping
+      const filled = companies.flatMap((c,i)=> c.isEmpty ? [] : [{...c, _idx:i}]);
 
       return (
         <div className="min-h-screen">
@@ -224,6 +236,17 @@
                 {companies.length===0 ? <option value={0}>n/a</option>
                   : companies.map((c,i)=><option key={i} value={i}>{c.ticker||"slot"}</option>)}
               </select>
+
+              <!-- Quick theme toggle in header -->
+              <button className="btn px-3 py-2" style={{background:'var(--surface-0)',borderColor:'var(--border)'}}
+                onClick={()=>{
+                  const next = getTheme()==='dark' ? 'light' : 'dark';
+                  setTheme(next);
+                  setThemeUI(next);
+                }}>
+                {getTheme()==='dark' ? 'Light mode' : 'Dark mode'}
+              </button>
+
               <button className="btn px-3 py-2" style={{background:'var(--surface-0)',borderColor:'var(--border)'}} onClick={()=>setShowSettings(true)}>Settings</button>
             </div>
           </header>
@@ -252,7 +275,12 @@
               </div>
 
               <div className="card p-3">
-                <CompareTable companies={companies.filter(c=>!c.isEmpty)} ratioDefs={ratioDefs} baselineIdx={baselineIdx} setBaselineIdx={setBaselineIdx}/>
+                <CompareTable
+                  items={filled}
+                  ratioDefs={ratioDefs}
+                  baselineIdx={baselineIdx}                 <!-- this is ORIGINAL index -->
+                  setBaselineIdx={setBaselineIdx}          <!-- pass setter for original index -->
+                />
               </div>
             </section>
           </main>
@@ -261,7 +289,7 @@
             <SettingsModal
               onClose={()=>setShowSettings(false)}
               keyUI={alphaKeyUI}
-              themeUI={theme}
+              themeUI={themeUI}
               onSave={(k,t)=>{ setAlphaKeyUI(k); setApiKey(k); setThemeUI(t); setTheme(t); }}
             />
           )}
@@ -284,8 +312,8 @@
           </div>
           <div className="pr-8">
             <div className="flex items-center justify-between mb-2">
-              <div className="font-semibold text-sm truncate pr-2" title={`${company.ticker} · ${company.name}`}>
-                {company.name} <span className="subtle">({company.ticker})</span>
+              <div className="font-semibold text-sm truncate pr-2" title={`${company.ticker} · ${company.name || company.ticker}`}>
+                {company.name || company.ticker} <span className="subtle">({company.ticker})</span>
               </div>
               <div className="flex items-center gap-2">
                 <IconBtn title="Back one year" onClick={onBack}><svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M15.5 19 8.5 12l7-7"/></svg></IconBtn>
@@ -340,7 +368,7 @@
       return (
         <div className="pill pill-draggable pill-row text-[13px]" draggable onDragStart={onDragStart} title="Drag into Ratio Builder">
           <span>{label}</span>
-          <span className="subtle tabular-nums">{value==null?"–":fmtMoney(value)}</span>
+          <span className="subtle tabular-nums">{value==null?"N/A":fmtMoney(value)}</span>
         </div>
       );
     }
@@ -354,7 +382,7 @@
         setHover(false);
       }
       return (
-        <div className={`dz px-3 py-3 min-h-[56px] rounded-lg ${hover?"hover":""}`}
+        <div className={`dz px-3 py-3 min-h=[56px] rounded-lg ${hover?"hover":""}`}
           onDragOver={e=>{e.preventDefault(); setHover(true);}} onDragLeave={()=>setHover(false)} onDrop={onDrop}>
           <div className={`text-[12px] ${filled?"":"subtle"}`}>{label}</div>
         </div>
@@ -382,10 +410,20 @@
       );
     }
 
-    function CompareTable({companies,ratioDefs,baselineIdx=0,setBaselineIdx}){
-      function pool(c){const y=c.years[c.yearIndex]; const s=c.data.statements[y]||{}; return {...(s.IncomeStatement||{}),...(s.BalanceSheet||{}),...(s.CashFlow||{})};}
-      function val(c,def){const p=pool(c); const n=p[def.numerator], d=p[def.denominator]; if(typeof n!=="number"||typeof d!=="number"||d===0) return null; return n/d;}
-      const base=companies[baselineIdx];
+    function CompareTable({items,ratioDefs,baselineIdx,setBaselineIdx}){
+      function pool(c){
+        const y=c.years[c.yearIndex];
+        const s=c.data.statements[y]||{};
+        return {...(s.IncomeStatement||{}),...(s.BalanceSheet||{}),...(s.CashFlow||{})};
+      }
+      function val(c,def){
+        const p=pool(c); const n=p[def.numerator], d=p[def.denominator];
+        if(typeof n!=="number"||typeof d!=="number"||d===0) return null;
+        return n/d;
+      }
+
+      const baseItem = items.find(it => it._idx === baselineIdx);
+      const baseValFor = r => baseItem ? val(baseItem, r) : null;
 
       return (
         <div className="overflow-auto">
@@ -393,22 +431,22 @@
             <thead>
               <tr className="text-left border-b" style={{borderColor:'var(--border)'}}>
                 <th className="py-2 pr-3 w-[44%]">Ratio</th>
-                {companies.map((c,i)=>(
-                  <th key={i}
-                      className={`py-2 pr-3 whitespace-nowrap w-[14%] cursor-pointer ${i===baselineIdx?'outline-best':''}`}
+                {items.map((it)=>(
+                  <th key={it._idx}
+                      className={`py-2 pr-3 whitespace-nowrap w-[14%] cursor-pointer ${it._idx===baselineIdx?'outline-best':''}`}
                       title="Click to set as baseline"
-                      onClick={()=>setBaselineIdx(i)}>
-                    {c.ticker} {c.years[c.yearIndex]?`(${c.years[c.yearIndex]})`:""}
+                      onClick={()=>setBaselineIdx(it._idx)}>
+                    {it.ticker} {it.years[it.yearIndex]?`(${it.years[it.yearIndex]})`:""}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {ratioDefs.length===0
-                ? <tr><td colSpan={companies.length+1} className="py-3 subtle">Define a ratio by dragging items, then press +.</td></tr>
+                ? <tr><td colSpan={items.length+1} className="py-3 subtle">Define a ratio by dragging items, then press +.</td></tr>
                 : ratioDefs.map((r,ri)=>{
-                    const vals=companies.map(c=>val(c,r));
-                    const baseVal=base?val(base,r):null;
+                    const vals=items.map(it=>val(it,r));
+                    const baseVal=baseValFor(r);
                     let bestIdx=-1, bestVal=null;
                     vals.forEach((v,i)=>{ if(v==null) return; if(bestVal==null){bestVal=v; bestIdx=i; return;} const better=higherIsBetter(r.label)?v>bestVal:v<bestVal; if(better){bestVal=v; bestIdx=i;} });
                     return (
@@ -417,12 +455,12 @@
                           <div className="font-medium">{r.label}</div>
                           <div className="text-[11px] subtle">{r.numerator} / {r.denominator}</div>
                         </td>
-                        {companies.map((c,i)=>{
+                        {items.map((it,i)=>{
                           const v=vals[i];
                           const isPct=/Margin|Return|to Sales|FCF/i.test(r.label);
-                          const txt=v==null?"–":isPct?`${(v*100).toFixed(1)}%`:v.toFixed(2);
+                          const txt=v==null?"N/A":isPct?`${(v*100).toFixed(1)}%`:v.toFixed(2);
                           let badge=null, color="";
-                          if(baseVal!=null && v!=null && i!==baselineIdx && Math.abs(baseVal)>0){
+                          if(baseVal!=null && v!=null && it._idx!==baselineIdx && Math.abs(baseVal)>0){
                             const diff=((v-baseVal)/Math.abs(baseVal))*100;
                             const better=higherIsBetter(r.label)?diff>0:diff<0;
                             badge=`${diff>=0?"+":""}${diff.toFixed(1)}%`;
@@ -430,7 +468,7 @@
                           }
                           const best=i===bestIdx && v!=null;
                           return (
-                            <td key={i} className="py-2 pr-3 tabular-nums align-top">
+                            <td key={it._idx} className="py-2 pr-3 tabular-nums align-top">
                               <div className={`inline-block px-2 py-1 rounded-md ${best?"outline-best":""}`}>
                                 <span>{txt}</span>
                                 {badge && <span className="ml-1 text-[11px]" style={{color}}>({badge})</span>}
@@ -468,7 +506,11 @@
                   <select className="btn px-2 py-1 text-sm"
                           style={{background:'var(--surface-1)',borderColor:'var(--border)'}}
                           value={theme}
-                          onChange={e=>setThemeLocal(e.target.value)}>
+                          onChange={e=>{
+                            const t = e.target.value;
+                            setThemeLocal(t);
+                            setTheme(t);
+                          }}>
                     <option value="dark">Dark</option>
                     <option value="light">Light</option>
                   </select>
@@ -479,7 +521,7 @@
               </div>
               <div>
                 <div className="text-sm font-semibold mb-1">How to use</div>
-                <div className="text-[12px] subtle">Add a ticker, save your key, build ratios with the + button. Click a header in the table to set baseline.</div>
+                <div className="text-[12px] subtle">Add a ticker, save your key, build ratios with the + button. Click a column header to set baseline.</div>
               </div>
             </div>
           </div>
