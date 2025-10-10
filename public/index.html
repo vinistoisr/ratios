@@ -288,7 +288,7 @@
       const build = ()=>{ if(num && den){ onMakeRatio(num,den); setNum(null); setDen(null); } };
 
       return (
-        <div className="card p-3 h-full">
+        <div className="card p-3">
           <div className="flex items-center justify-between mb-4">
             <div className="text-lg font-semibold">Financial Ratio Builder</div>
             <div className="flex items-center gap-2">
@@ -392,7 +392,7 @@
       }
 
       return (
-        <div className="card p-3 h-full overflow-y-auto nice-scroll">
+        <div className="card p-3">
           <div className="flex items-center justify-between mb-2">
             <div className="text-sm font-semibold">AI Analysis</div>
             <button
@@ -737,11 +737,7 @@
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
               <div className="xl:col-span-6 flex flex-col gap-4 min-h-0">
                 <RatioBuilder onMakeRatio={makeRatio} />
-                {/* fixed-height wrapper so the panel never grows into the next section */}
-                <div className="min-h-0 h-[18rem] lg:h-[16rem] overflow-hidden">
                   <AiPanel items={filled} ratioDefs={ratioDefs} baselineIdx={baselineIdx} />
-                </div>
-
               </div>
           
               <div className="xl:col-span-6 min-h-0">
@@ -758,7 +754,7 @@
           </section>
 
 
-          <main className="px-4 pb-4 relative z-10">
+          <main className="px-4 pb-4">
             <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {companies.map((c,idx)=>(
                 c.isEmpty
@@ -791,6 +787,7 @@
   </script>
 </body>
 </html>
+
 
 
 
