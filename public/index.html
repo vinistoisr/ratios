@@ -49,6 +49,43 @@
       box-shadow:0 0 0 2px var(--accent) inset, 0 0 12px rgba(46,204,113,.35);
       background:rgba(46,204,113,.08);
     }
+    /* Minimal, elegant scrollbars (vertical-only) */
+:root{
+  --scroll-thumb: rgba(255,255,255,0.25);
+  --scroll-thumb-hover: rgba(255,255,255,0.40);
+  --scroll-track: transparent;
+}
+
+/* Firefox */
+.nice-scroll{
+  scrollbar-width: thin;               /* thin track */
+  scrollbar-color: var(--scroll-thumb) var(--scroll-track);
+  scrollbar-gutter: stable both-edges; /* keeps layout steady */
+  overscroll-behavior: contain;
+}
+
+/* WebKit (Chrome/Edge/Safari) */
+.nice-scroll::-webkit-scrollbar{
+  width: 6px;            /* thin vertical strip */
+  height: 6px;           /* in case horizontal ever appears */
+}
+.nice-scroll::-webkit-scrollbar-track{
+  background: var(--scroll-track);
+}
+.nice-scroll::-webkit-scrollbar-thumb{
+  background: var(--scroll-thumb);
+  border-radius: 999px;
+}
+.nice-scroll:hover::-webkit-scrollbar-thumb{
+  background: var(--scroll-thumb-hover);
+}
+
+/* Optional: hide horizontal bar if any content spills */
+.nice-scroll{
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch; /* smooth on iOS */
+}
+
   </style>
 
   <!-- React 18 UMD + Babel -->
@@ -331,7 +368,7 @@
       }
 
       return (
-       <div className="card p-3 min-h-[180px] md:min-h-[220px] overflow-auto">
+       <div className="card p-3 min-h-[180px] md:min-h-[220px] overflow-auto nice-scroll">
           <div className="flex items-center justify-between mb-2">
             <div className="text-sm font-semibold">AI Analysis</div>
             <button
@@ -467,7 +504,7 @@
       const baseValFor = r => baseItem ? val(baseItem, r) : null;
 
       return (
-        <div className="card p-3 h-full overflow-auto">
+          <div className="card p-3 h-full overflow-auto nice-scroll">
           <div className="flex items-center justify-between mb-2">
             <div className="text-sm font-semibold">Ratio</div>
             <button className="text-xs btn btn-ghost px-2 py-1" style={{borderColor:'var(--border)'}} title="Remove all ratios" onClick={clearAll}>
@@ -707,5 +744,6 @@
   </script>
 </body>
 </html>
+
 
 
