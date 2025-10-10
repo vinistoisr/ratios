@@ -44,7 +44,7 @@
     /* baseline, subtle */
     .baseline-card{border-left:4px solid var(--accent);}
 
-    /* highlight just-dropped line items in baseline card */
+    /* ingredient highlight on baseline card */
     .highlight-glow{
       box-shadow:0 0 0 2px var(--accent) inset, 0 0 12px rgba(46,204,113,.35);
       background:rgba(46,204,113,.08);
@@ -415,7 +415,6 @@
                       if(better){bestVal=v; bestIdx=i;}
                     });
 
-                    // build math tooltips and 1 line meaning per cell
                     const meaning = RATIO_MEANING[r.label] || `${r.numerator} per ${r.denominator}.`;
 
                     return (
@@ -477,10 +476,9 @@
       const [ratioDefs,setRatioDefs]=useState([]);
       const [baselineIdx,setBaselineIdx]=useState(0);
       const [themeUI,setThemeUI]=useState(getTheme());
-      const [highlightSet,setHighlightSet]=useState(null); // Set of labels to highlight on baseline
+      const [highlightSet,setHighlightSet]=useState(null);
       const hlTimerRef = useRef(null);
 
-      // theme toggle click
       function toggleTheme(){
         const next = getTheme()==="dark" ? "light" : "dark";
         setTheme(next);
@@ -524,7 +522,7 @@
         const entry={numerator:n.label,denominator:d.label,label:lbl};
         setRatioDefs(p=>p.some(r=>r.numerator===entry.numerator && r.denominator===entry.denominator)?p:[...p,entry]);
 
-        // ingredient highlight on baseline for a short time
+        // highlight ingredients on baseline
         if (hlTimerRef.current) clearTimeout(hlTimerRef.current);
         setHighlightSet(new Set([n.label, d.label]));
         hlTimerRef.current = setTimeout(()=>setHighlightSet(null), 3500);
@@ -563,14 +561,14 @@
               title="Toggle light or dark"
               aria-label="Toggle theme"
             >
-              <!-- sun and moon icon -->
+              {/* sun + moon icon */}
               <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
                 <path fill="currentColor" d="M12 4a1 1 0 0 1 1 1v1a1 1 0 1 1-2 0V5a1 1 0 0 1 1-1Zm0 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 11H3a1 1 0 1 0 0 2h1a1 1 0 1 0 0-2Zm18 0h-1a1 1 0 1 0 0 2h1a1 1 0 1 0 0-2ZM6.3 6.3a1 1 0 0 1 1.4 0l.7.7a1 1 0 1 1-1.4 1.4l-.7-.7a1 1 0 0 1 0-1.4Zm9.3 9.3a1 1 0 0 1 1.4 0l.7.7a1 1 0 1 1-1.4 1.4l-.7-.7a1 1 0 0 1 0-1.4ZM6.3 17.7a1 1 0 0 1 1.4 0l.7.7a1 1 0 0 1-1.4 1.4l-.7-.7a1 1 0 0 1 0-1.4Zm9.3-9.3a1 1 0 0 1 1.4 0l.7.7a1 1 0 0 1-1.4 1.4l-.7-.7a1 1 0 0 1 0-1.4Z"/>
               </svg>
             </button>
           </header>
 
-          <!-- top row: builder left, results right -->
+          {/* top row: builder left, results right */}
           <section className="p-4">
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
               <div className="xl:col-span-6">
@@ -589,7 +587,7 @@
             </div>
           </section>
 
-          <!-- cards grid -->
+          {/* cards grid */}
           <main className="px-4 pb-4">
             <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {companies.map((c,idx)=>(
