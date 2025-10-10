@@ -275,7 +275,7 @@
             <SettingsModal
               onClose={()=>setShowSettings(false)}
               keyUI={alphaKeyUI}
-              themeUI={getTheme()}
+              themeUI={themeUI}
               onSave={(k,t)=>{ setAlphaKeyUI(k); setApiKey(k); setThemeUI(t); setTheme(t); }}
             />
           )}
@@ -493,7 +493,7 @@
                   </select>
                 </div>
                 <div className="mt-3 flex gap-2">
-                  <button className="btn btn-accent px-3 py-2" onClick={()=>onSave(val,theme)}>Save</button>
+                  <button className="btn btn-accent px-3 py-2" onClick={()=>{ onSave(val,theme); onClose(); }}>Save</button>
                 </div>
               </div>
               <div>
