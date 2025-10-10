@@ -272,12 +272,10 @@
             <SettingsModal
               onClose={()=>setShowSettings(false)}
               themeUI={themeUI}
-              onSave={(k,t)=>{ setAlphaKeyUI(k); setApiKey(k); setThemeUI(t); setTheme(t); }}
+              onSave={(t)=>{ setThemeUI(t); setTheme(t); setShowSettings(false); }}
             />
           )}
-        </div>
-      );
-    }
+
 
     function CompanyCard({company,isBaseline,onRemove,onBack,onForward}){
       const y=company.years[company.yearIndex];
@@ -513,5 +511,6 @@ function SettingsModal({ onClose, themeUI, onSave }) {
   </script>
 </body>
 </html>
+
 
 
