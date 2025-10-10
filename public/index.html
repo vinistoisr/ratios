@@ -264,112 +264,93 @@
       );
     }
 
-  function AiPanel({ items, ratioDefs, baselineIdx }) {
-  const [loading, setLoading] = React.useState(false);
-  const [text, setText] = React.useState("");
-  const [err, setErr] = React.useState("");
+    function AiPanel({ items, ratioDefs, baselineIdx }) {
+      const [loading, setLoading] = React.useState(false);
+      const [text, setText] = React.useState("");
+      const [err, setErr] = React.useState("");
 
-  function pool(c) {
-    const y = c.years[c.yearIndex];
-    const s = (c.data && c.data.statements) ? c.data.statements[y] : {};
-    const inc = s?.IncomeStatement || {};
-    const bal = s?.BalanceSheet || {};
-    const cfs = s?.CashFlow || {};
-    return { year: y, metrics: { ...inc, ...bal, ...cfs } };
-  }
+      function pool(c) {
+        const y = c.years[c.yearIndex];
+        const s = (c.data && c.data.statements) ? c.data.statements[y] : {};
+        const inc = s?.IncomeStatement || {};
+        const bal = s?.BalanceSheet || {};
+        const cfs = s?.CashFlow || {};
+        return { year: y, metrics: { ...inc, ...bal, ...cfs } };
+      }
 
-  // Build a compact payload: selected year per company + active ratios
-  function buildPayload() {
-    const compactCompanies = items.map(it => {
-      const { year, metrics } = pool(it);
+      function buildPayload() {
+        const compactCompanies = items.map(it => {
+          const { year, metrics } = pool(it);
+          const ratios = ratioDefs.map(r => {
+            const n = metrics[r.numerator];
+            const d = metrics[r.denominator];
+            const v = (typeof n === "number" && typeof d === "number" && d !== 0) ? n / d : null;
+            return { label: r.label, numerator: r.numerator, denominator: r.denominator, value: v };
+          });
+          const keep = (k) => metrics[k] ?? null;
+          const head = {
+            Revenue: keep("Revenue"),
+            "Gross Profit": keep("Gross Profit"),
+            "Operating Income": keep("Operating Income"),
+            "Net Income": keep("Net Income"),
+            "Total Assets": keep("Total Assets"),
+            Equity: keep("Equity"),
+            "Total Liabilities": keep("Total Liabilities"),
+            "Current Assets": keep("Current Assets"),
+            "Current Liabilities": keep("Current Liabilities"),
+            "Cash from Operations": keep("Cash from Operations"),
+            CapEx: keep("CapEx"),
+            "Free Cash Flow": keep("Free Cash Flow"),
+          };
+          return { ticker: it.ticker, name: it.name, year, headline: head, ratios };
+        });
 
-      // Compute active ratios for the LLM (numerical only)
-      const ratios = ratioDefs.map(r => {
-        const n = metrics[r.numerator];
-        const d = metrics[r.denominator];
-        const v = (typeof n === "number" && typeof d === "number" && d !== 0) ? n / d : null;
-        return { label: r.label, numerator: r.numerator, denominator: r.denominator, value: v };
-      });
+        return {
+          companies: compactCompanies,
+          ratioDefs: ratioDefs.map(r => ({ label: r.label, numerator: r.numerator, denominator: r.denominator })),
+          baselineIdx
+        };
+      }
 
-      // Keep a small set of headline metrics that often matter
-      const keep = (k) => metrics[k] ?? null;
-      const head = {
-        Revenue: keep("Revenue"),
-        "Gross Profit": keep("Gross Profit"),
-        "Operating Income": keep("Operating Income"),
-        "Net Income": keep("Net Income"),
-        "Total Assets": keep("Total Assets"),
-        Equity: keep("Equity"),
-        "Total Liabilities": keep("Total Liabilities"),
-        "Current Assets": keep("Current Assets"),
-        "Current Liabilities": keep("Current Liabilities"),
-        "Cash from Operations": keep("Cash from Operations"),
-        CapEx: keep("CapEx"),
-        "Free Cash Flow": keep("Free Cash Flow"),
-      };
+      async function run() {
+        try {
+          setLoading(true); setErr(""); setText("");
+          const res = await fetch("/api/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(buildPayload())
+          });
+          const j = await res.json();
+          if (!res.ok) throw new Error(j.error || "Analysis failed");
+          setText((j.text || "").trim());
+        } catch (e) {
+          setErr(String(e));
+        } finally {
+          setLoading(false);
+        }
+      }
 
-      return {
-        ticker: it.ticker,
-        name: it.name,
-        year,
-        headline: head,
-        ratios
-      };
-    });
-
-    return {
-      companies: compactCompanies,
-      ratioDefs: ratioDefs.map(r => ({ label: r.label, numerator: r.numerator, denominator: r.denominator })),
-      baselineIdx
-    };
-  }
-
-  async function run() {
-    try {
-      setLoading(true); setErr(""); setText("");
-      const res = await fetch("/api/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildPayload())
-      });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error || "Analysis failed");
-      setText((j.text || "").trim());
-    } catch (e) {
-      setErr(String(e));
-    } finally {
-      setLoading(false);
+      return (
+        <div className="card p-3">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-sm font-semibold">AI Analysis</div>
+            <button
+              className="btn btn-accent px-3 py-2"
+              onClick={run}
+              disabled={loading || items.length === 0}
+              title="Generate a concise comparison"
+            >
+              {loading ? "Analyzing…" : "Generate"}
+            </button>
+          </div>
+          {err && <div className="text-[12px]" style={{color:"var(--danger)"}}>{err}</div>}
+          <div className="text-[13px] whitespace-pre-wrap">
+            {text || "Click Generate to produce an ai-summary comparing the visible companies using the active ratios and selected years."}
+          </div>
+        </div>
+      );
     }
-  }
 
-  return (
-    <div className="card p-3">
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-sm font-semibold">AI Analysis</div>
-        <button
-          className="btn btn-accent px-3 py-2"
-          onClick={run}
-          disabled={loading || items.length === 0}
-          title="Generate a concise comparison"
-        >
-          {loading ? "Analyzing…" : "Generate"}
-        </button>
-      </div>
-      {err && <div className="text-[12px]" style={{color:"var(--danger)"}}>{err}</div>}
-      <div className="text-[13px] whitespace-pre-wrap">
-        {text || "Click Generate to produce an ai-summary comparing the visible companies using the active ratios and selected years."}
-      </div>
-    </div>
-  );
-}
-
-
-
-
-
-
-
-    
     function CompanyCard({company,isBaseline,onRemove,onBack,onForward,highlightKeys}){
       const y=company.years[company.yearIndex];
       const s=(company.data && company.data.statements) ? company.data.statements[y] : null;
@@ -669,18 +650,18 @@
             >
               {/* sun + moon icon */}
               <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                <path fill="currentColor" d="M12 4a1 1 0 0 1 1 1v1a1 1 0 1 1-2 0V5a1 1 0 0 1 1-1Zm0 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 11H3a1 1 0 1 0 0 2h1a1 1 0 1 0 0-2Zm18 0h-1a1 1 0 1 0 0 2h1a1 1 0 1 0 0-2ZM6.3 6.3a1 1 0 0 1 1.4 0l.7.7a1 1 0 1 1-1.4 1.4l-.7-.7a1 1 0 0 1 0-1.4Zm9.3 9.3a1 1 0 0 1 1.4 0l.7.7a1 1 0 1 1-1.4 1.4l-.7-.7a1 1 0 0 1 0-1.4ZM6.3 17.7a1 1 0 0 1 1.4 0l.7.7a1 1 0 0 1-1.4 1.4l-.7-.7a1 1 0 0 1 0-1.4Zm9.3-9.3a1 1 0 0 1 1.4 0l.7.7a1 1 0 0 1-1.4 1.4l-.7-.7a1 1 0 0 1 0-1.4Z"/>
+                <path fill="currentColor" d="M12 4a1 1 0 0 1 1 1v1a1 1 0 1 1-2 0V5a1 1 0 0 1 1-1Zm0 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 11H3a1 1 0 1 0 0 2h1a1 1 0 1 0 0-2Zm18 0h-1a1 1 0 1 0 0 2h1a1 1 0 1 0 0-2ZM6.3 6.3a1 1 0 0 1 1.4 0l.7.7a1 1 0 1 1-1.4 1.4l-.7-.7a1 1 0 0 1 0-1.4Zm9.3 9.3a1 1 0 0 1 1.4 0l.7.7a1 1 0 1 1-1.4 1.4l-.7-.7a1 1 0 0 1 0-1.4ZM6.3 17.7a1 1 0 0 1 1.4 0l.7.7a1 1 0 0 1-1.4 1.4l-.7-.7a1 1 0 0 1 0-1.4Zm9.3-9.3a1 1 0 0 1 1.4 0l.7.7a1 1 0 1 1-1.4 1.4l-.7-.7a1 1 0 0 1 0-1.4Z"/>
               </svg>
             </button>
           </header>
 
-          {/* top row: builder left, results right */}
+          <!-- single top row: builder (left) + ratio table & AI (right) -->
           <section className="p-4">
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
               <div className="xl:col-span-6">
                 <RatioBuilder onMakeRatio={makeRatio}/>
               </div>
-              <div className="xl:col-span-6">
+              <div className="xl:col-span-6 flex flex-col gap-4">
                 <CompareTable
                   items={filled}
                   ratioDefs={ratioDefs}
@@ -689,34 +670,16 @@
                   removeRatio={removeRatio}
                   clearAll={clearAll}
                 />
-              </div>
-            </div>
-          </section>
-          <section className="p-4">
-            <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-             <div className="xl:col-span-6">
-               <RatioBuilder onMakeRatio={makeRatio}/>
-             </div>
-            <div className="xl:col-span-6 flex flex-col gap-4">
-              <CompareTable
-                items={filled}
-                ratioDefs={ratioDefs}
-                baselineIdx={baselineIdx}
-                setBaselineIdx={setBaselineIdx}
-                removeRatio={removeRatio}
-                clearAll={clearAll}
-              />
-              <AiPanel
-                items={filled}
-                ratioDefs={ratioDefs}
-                baselineIdx={baselineIdx}
+                <AiPanel
+                  items={filled}
+                  ratioDefs={ratioDefs}
+                  baselineIdx={baselineIdx}
                 />
               </div>
             </div>
           </section>
 
-
-          {/* cards grid */}
+          <!-- cards grid -->
           <main className="px-4 pb-4">
             <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {companies.map((c,idx)=>(
@@ -746,4 +709,3 @@
   </script>
 </body>
 </html>
-
