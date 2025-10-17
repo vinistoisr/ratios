@@ -1,6 +1,7 @@
 # The Iron Vanguard · Financial Ratios Builder
 
-![Logo](public/logo_transparent.png)
+<img width="1888" height="921" alt="image" src="https://github.com/user-attachments/assets/fbd83f83-c7d1-46e2-a0be-40dba0ee35a0" />
+
 
 ## 📌 Overview
 
