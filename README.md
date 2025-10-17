@@ -2,11 +2,11 @@
 
 <img width="1888" height="921" alt="image" src="https://github.com/user-attachments/assets/fbd83f83-c7d1-46e2-a0be-40dba0ee35a0" />
 
-
 ## 📌 Overview
 
-This project was built as part of the **MBA 520 course at the University of Victoria (Class of 2025)** under the instruction of **Professor Kimball Ketsa**.  
-Our team — **The Iron Vanguard** — created this tool to **explore, calculate, and compare financial ratios across public companies** using real financial statement data.
+This project was built as part of the **MBA 520 course at the University of Victoria (Class of 2025)** under the instruction of **Professor Kimball Ketsa**.
+
+Our team **The Iron Vanguard** created this tool to **explore, calculate, and compare financial ratios across public companies** using real financial statement data.
 
 The site provides an interactive interface for selecting tickers, fetching statements from Alpha Vantage, and dynamically building custom ratios for analysis and discussion.
 
