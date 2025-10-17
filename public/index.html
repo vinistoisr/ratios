@@ -295,8 +295,24 @@
     }
 
     async function fetchStatements(ticker){
-      const [is, bs, cf, ov] = await Promise.all([avIncome(ticker), avBalance(ticker), avCash(ticker), avOverview(ticker)]);
-      return mapFromAV(ticker, is, bs, cf, ov);
+      const s = symKey(ticker);
+    
+      // Try one call per ticker first
+      try {
+        const bundle = await cached(`BUNDLE:${s}`, () =>
+          fetchJson(`${AV_BASE}?bundle=1&symbol=${encodeURIComponent(s)}`)
+        );
+        return mapFromAV(s, bundle.income_statement, bundle.balance_sheet, bundle.cash_flow, bundle.overview);
+      } catch (_e) {
+        // Fallback to four per function, uses your existing caches
+        const [is, bs, cf, ov] = await Promise.all([
+          avIncome(s),
+          avBalance(s),
+          avCash(s),
+          avOverview(s),
+        ]);
+        return mapFromAV(s, is, bs, cf, ov);
+      }
     }
 
     /* UI parts */
@@ -846,6 +862,7 @@
   </script>
 </body>
 </html>
+
 
 
 
