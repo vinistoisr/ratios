@@ -2,7 +2,7 @@
 
 <img width="1888" height="921" alt="image" src="https://github.com/user-attachments/assets/fbd83f83-c7d1-46e2-a0be-40dba0ee35a0" />
 
-## 📌 Overview
+## Overview
 
 This project was built as part of the **MBA 520 course at the University of Victoria (Class of 2025)** under the instruction of **Professor Kimball Ketsa**.
 
@@ -12,7 +12,7 @@ The site provides an interactive interface for selecting tickers, fetching state
 
 ---
 
-## 🎯 Purpose
+## Purpose
 
 In class, we often analyze companies using common ratios (e.g., ROE, Current Ratio, Net Margin). The challenge is that gathering and organizing raw statements for multiple firms is tedious.  
 This project was designed to:
@@ -26,7 +26,7 @@ The broader learning goal: to connect **financial theory** with **practical data
 
 ---
 
-## 👥 Team Members
+## Team Members
 
 - **Vincent Royer**  
 - **[Other Team Members’ Names]**  
@@ -35,7 +35,7 @@ The broader learning goal: to connect **financial theory** with **practical data
 
 ---
 
-## 🛠️ Technologies Used
+## Technologies Used
 
 - **React 18 (with JSX via Babel)** – For building an interactive UI in a single HTML file.
 - **TailwindCSS (CDN)** – For modern, responsive styling with minimal setup.
@@ -48,7 +48,7 @@ We deliberately kept the stack simple: no database, no heavy build pipeline, no 
 
 ---
 
-## 📊 Features
+## Features
 
 - Add multiple company tickers and retrieve their financial statements.
 - Drag and drop financial statement items into a **Ratio Builder**.
@@ -59,7 +59,7 @@ We deliberately kept the stack simple: no database, no heavy build pipeline, no 
 
 ---
 
-## ⚡ Lessons Learned (API & Performance)
+## Lessons Learned (API & Performance)
 
 Using Alpha Vantage taught us important lessons:
 
@@ -74,7 +74,7 @@ Using Alpha Vantage taught us important lessons:
 
 ---
 
-## 🗂️ Caching System
+## Caching System
 
 The project uses **three levels of caching**:
 
@@ -86,7 +86,7 @@ This layered approach ensures fast responses and stays under API limits.
 
 ---
 
-## 🏗️ Development Timeline
+## Development Timeline
 
 - **Fall 2025** – Project conceived and implemented as a team deliverable.  
 - Built in about **2–3 weeks**, balancing coursework, learning curve, and experimenting with new tools.  
@@ -94,7 +94,7 @@ This layered approach ensures fast responses and stays under API limits.
 
 ---
 
-## 📚 How It Works (High Level)
+## How It Works (High Level)
 
 1. A user enters a ticker (e.g., `AAPL`).  
 2. Frontend checks **localStorage**. If no fresh data, it calls `/api/alpha?bundle=1&symbol=AAPL`.  
@@ -105,7 +105,7 @@ This layered approach ensures fast responses and stays under API limits.
 
 ---
 
-## 🚀 Future Improvements
+## Future Improvements
 
 - Switch from Tailwind CDN to a compiled stylesheet for production optimization.
 - Add more advanced financial metrics (DuPont decomposition, trend charts).
@@ -114,7 +114,7 @@ This layered approach ensures fast responses and stays under API limits.
 
 ---
 
-## ✅ Conclusion
+## Conclusion
 
 This project gave our team hands-on experience in:
 
@@ -126,7 +126,7 @@ The Ratios Builder is more than a class assignment — it’s a practical tool w
 
 ---
 
-## 📄 License
+## License
 
 This project is for educational purposes under the University of Victoria MBA program.  
 Not intended for commercial use.
