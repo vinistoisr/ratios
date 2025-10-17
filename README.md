@@ -14,13 +14,13 @@ The site provides an interactive interface for selecting tickers, fetching state
 
 ## Purpose
 
-In class, we often analyze companies using common ratios (e.g., ROE, Current Ratio, Net Margin). The challenge is that gathering and organizing raw statements for multiple firms is tedious.  
+In class, we learned how to analyze companies using common ratios (e.g., ROE, Current Ratio, Net Margin). The challenge is that gathering and organizing raw statements for multiple firms is tedious.  
 This project was designed to:
 
-- Automate the retrieval of financial statements.
+- Automate the retrieval of financial statements from reputable sources.
 - Make ratio calculations transparent and customizable.
 - Encourage exploration of "what-if" analysis with drag-and-drop building blocks.
-- Provide a **visual and interactive supplement** to traditional spreadsheet work.
+- Provide a visual and interactive supplement to traditional spreadsheet work.
 
 The broader learning goal: to connect **financial theory** with **practical data analysis** and to better understand how ratios shape investment and management decisions.
 
@@ -29,9 +29,13 @@ The broader learning goal: to connect **financial theory** with **practical data
 ## Team Members
 
 - **Vincent Royer**  
-- **[Other Team Members’ Names]**  
-- **University of Victoria – MBA 520 (Class of 2025)**  
-- Instructor: **[Instructor’s Full Name]**
+- **Aster Aytenfisu**
+- **Chantelle Carden**  
+- **Hai Luong**  
+- **Robin Shelley**  
+
+- **University of Victoria – MBA520 (Class of 2025)**  
+- Instructor: **Kimball Ketsa**
 
 ---
 
@@ -40,7 +44,7 @@ The broader learning goal: to connect **financial theory** with **practical data
 - **React 18 (with JSX via Babel)** – For building an interactive UI in a single HTML file.
 - **TailwindCSS (CDN)** – For modern, responsive styling with minimal setup.
 - **Cloudflare Pages + Functions** – Serverless deployment and backend proxying of API requests.
-- **Alpha Vantage API** – Free source of financial statements and company overviews.
+- **Alpha Vantage API** – Reliable source of financial statements and company overviews.
 - **LocalStorage** – Lightweight client-side persistence for cached data.
 - **Cloudflare Edge Caching** – Shared caching layer so all users benefit once a ticker is fetched.
 
@@ -97,8 +101,8 @@ This layered approach ensures fast responses and stays under API limits.
 ## How It Works (High Level)
 
 1. A user enters a ticker (e.g., `AAPL`).  
-2. Frontend checks **localStorage**. If no fresh data, it calls `/api/alpha?bundle=1&symbol=AAPL`.  
-3. Cloudflare Function fetches from Alpha Vantage, caches the result at the edge for 72 hours, and returns JSON.  
+2. Frontend checks **localStorage**. If no cached data is found for that ticker, it calls `/api/alpha?bundle=1&symbol=AAPL`.  
+3. Cloudflare Function fetches from Alpha Vantage, caches the result at the edge for 72 hours, and returns JSON to the frontend.  
 4. Frontend maps statements into a normalized structure and displays them.  
 5. Users drag-drop metrics to build ratios or select from presets.  
 6. Ratios are calculated dynamically and displayed in a comparison table.
@@ -122,7 +126,7 @@ This project gave our team hands-on experience in:
 - **Managing strict API limits** through bundling and caching.  
 - **Turning raw data into actionable insights**, bridging our MBA finance curriculum with real-world data engineering.
 
-The Ratios Builder is more than a class assignment — it’s a practical tool we can use to compare companies quickly and visually, while respecting the constraints of real-world APIs.
+The Ratios Builder is a practical tool we can use to compare companies quickly and visually.
 
 ---
 
