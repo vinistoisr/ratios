@@ -547,10 +547,12 @@
           <div className="font-semibold text-sm">Add Ticker</div>
           <div className="flex items-center gap-2">
             <input
+              id="ticker"            // add
+              name="ticker"          // add
               value={val}
               onChange={e=>setVal(e.target.value)}
               onKeyDown={e=>{ if(e.key==="Enter") submit(); }}
-              placeholder="e.g., AAPL"
+              placeholder="e.g.: TSLA"
               className="px-3 py-2 rounded-xl btn w-[160px]"
               style={{background:'var(--surface-0)',borderColor:'var(--border)'}}
             />
@@ -862,6 +864,7 @@
   </script>
 </body>
 </html>
+
 
 
 
