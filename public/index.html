@@ -174,37 +174,74 @@
     
     async function fetchJson(u){
       const t0 = Date.now();
-      const r = await fetch(u, { cache: 'no-store' });
+      const r = await fetch(u); // allow browser reuse within session
       const txt = await r.text();
       let j = null;
       try { j = JSON.parse(txt); } catch {}
-    
+
       DEBUG.push({
         url: u, status: r.status, ms: Date.now()-t0,
         avNote: j?.Note, avInfo: j?.Information, avErr: j?.["Error Message"],
         proxyErr: j?.error, proxyDetail: j?.detail
       });
-    
+
       if (!r.ok) {
         const msg = j?.error || `HTTP ${r.status}`;
         const detail = j?.detail || j?.["Error Message"] || j?.Note || j?.Information;
-        throw new Error(detail ? `${msg}: ${detail}` : msg);
+        const e = new Error(detail ? `${msg}: ${detail}` : msg);
+        e.retryAfter = r.headers.get("Retry-After");
+        throw e;
       }
       if (j?.Note || j?.Information || j?.["Error Message"]) {
-        // defensive: should not happen now that proxy maps to !ok
-        const detail = j.Note || j.Information || j["Error Message"];
-        throw new Error(detail);
+        // Alpha sometimes returns 200 with a Note/Information when throttled
+        const e = new Error("rate_limited");
+        e.retryAfter = r.headers.get("Retry-After");
+        throw e;
       }
       return j;
     }
 
+    // 72h local persistence for fundamentals
+    const TTL_MS = 72 * 60 * 60 * 1000;
+    const LS_KEY = "av_cache_v1";
+    let LS = {};
+    try { LS = JSON.parse(localStorage.getItem(LS_KEY) || "{}"); } catch {}
+
+    function getLocal(key) {
+      const v = LS[key];
+      if (!v) return null;
+      if (Date.now() - v.t > TTL_MS) return null;
+      return v.data;
+    }
+
+    function putLocal(key, data) {
+      LS[key] = { t: Date.now(), data };
+      try {
+        const keys = Object.keys(LS);
+        if (keys.length > 600) {
+          const arr = keys.map(k => [k, LS[k]?.t || 0]).sort((a,b)=>a[1]-b[1]);
+          for (let i = 0; i < Math.min(30, arr.length); i++) delete LS[arr[i][0]];
+        }
+        localStorage.setItem(LS_KEY, JSON.stringify(LS));
+      } catch {}
+    }
+
+    
     const mem = new Map();
     function cached(key, loader){
+      const hit = getLocal(key);
+      if (hit) return Promise.resolve(hit);
+
       if (mem.has(key)) return mem.get(key);
-      const p = loader().catch(e => { mem.delete(key); throw e; });
+
+      const p = loader()
+        .then(data => { putLocal(key, data); return data; })
+        .catch(e => { mem.delete(key); throw e; });
+
       mem.set(key, p);
       return p;
     }
+    
     const symKey = s => (s || "").trim().toUpperCase();
     const avUrl = (fn, sym) => `${AV_BASE}?function=${fn}&symbol=${encodeURIComponent(symKey(sym))}`;
     const avIncome   = sym => cached(`IS:${symKey(sym)}`, () => fetchJson(avUrl('INCOME_STATEMENT', sym)));
@@ -809,6 +846,7 @@
   </script>
 </body>
 </html>
+
 
 
 
