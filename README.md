@@ -5,7 +5,7 @@
 
 ## 📌 Overview
 
-This project was built as part of the **MBA 520 course at the University of Victoria (Class of 2025)** under the instruction of **Professor [Insert Teacher’s Name]**.  
+This project was built as part of the **MBA 520 course at the University of Victoria (Class of 2025)** under the instruction of **Professor Kimball Ketsa**.  
 Our team — **The Iron Vanguard** — created this tool to **explore, calculate, and compare financial ratios across public companies** using real financial statement data.
 
 The site provides an interactive interface for selecting tickers, fetching statements from Alpha Vantage, and dynamically building custom ratios for analysis and discussion.
