@@ -121,6 +121,7 @@
       "Net Income/Total Assets":"Return on Assets",
       "Current Assets/Current Liabilities":"Current Ratio",
       "Total Liabilities/Equity":"Debt to Equity",
+      "Total Liabilities/Total Assets":"Debt-to-Assets",
       "Operating Income/Revenue":"Operating Margin",
       "Cash from Operations/Revenue":"Operating Cash Flow to Sales",
       "CapEx/Revenue":"CapEx to Revenue",
@@ -136,6 +137,7 @@
       "Return on Assets":"Profit generated per dollar of total assets.",
       "Current Ratio":"Ability to meet short term obligations with short term assets.",
       "Debt to Equity":"Leverage relative to equity, higher means more debt financed.",
+      "Debt-to-Assets":"Proportion of total assets financed by liabilities.",
       "Operating Margin":"Core operating profitability per dollar of sales.",
       "Operating Cash Flow to Sales":"Cash generation from operations per dollar of sales.",
       "CapEx to Revenue":"Investment intensity relative to sales.",
@@ -152,6 +154,7 @@
       { name:"ROE", n:"Net Income", d:"Equity", tip:RATIO_MEANING["Return on Equity"] },
       { name:"ROA", n:"Net Income", d:"Total Assets", tip:RATIO_MEANING["Return on Assets"] },
       { name:"Debt to Equity", n:"Total Liabilities", d:"Equity", tip:RATIO_MEANING["Debt to Equity"] },
+      { name:"Debt-to-Assets", n:"Total Liabilities", d:"Total Assets", tip:RATIO_MEANING["Debt-to-Assets"] },
       { name:"Op CF to Sales", n:"Cash from Operations", d:"Revenue", tip:RATIO_MEANING["Operating Cash Flow to Sales"] },
       { name:"CapEx to Revenue", n:"CapEx", d:"Revenue", tip:RATIO_MEANING["CapEx to Revenue"] },
       { name:"Asset Turnover", n:"Revenue", d:"Total Assets", tip:RATIO_MEANING["Asset Turnover"] },
@@ -166,7 +169,7 @@
       return `${base.toFixed(2)}${unit}`;
     };
     const ratioLabel=(num,den)=>KNOWN[`${num}/${den}`]||`${num} ÷ ${den}`;
-    const higherIsBetter=label=>/debt to equity/i.test(label)?false:true;
+    const higherIsBetter=label=>/(debt to equity|debt[- ]to[- ]assets)/i.test(label)?false:true;
 
     const Tag=({children})=><span className="px-2 py-0.5 rounded-full text-[11px] subtle border" style={{borderColor:'var(--border)'}}>{children}</span>;
     const IconBtn=({onClick, title, children})=><button className="btn btn-ghost btn-icon" style={{borderColor:'var(--border)'}} title={title} onClick={onClick}>{children}</button>;
