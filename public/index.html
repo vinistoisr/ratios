@@ -128,6 +128,7 @@
       "Total Assets/Equity":"Equity Multiplier",
       "Revenue/Total Assets":"Asset Turnover",
       "Free Cash Flow/Revenue":"FCF Margin",
+      "Cost of Revenues/Average Inventory":"Inventory Turnover Ratio",
     };
 
     const RATIO_MEANING = {
@@ -144,21 +145,25 @@
       "Equity Multiplier":"Balance sheet leverage, assets per dollar of equity.",
       "Asset Turnover":"Efficiency, sales generated per dollar of assets.",
       "FCF Margin":"Free cash flow generated per dollar of sales.",
+      "Inventory Turnover Ratio":"Speed of selling inventory, measured as cost of goods sold per dollar of average inventory.",
+      "Days in Inventory":"Average number of days inventory stays on hand before being sold.",
     };
 
     const COMMON_RATIOS = [
-      { name:"Current Ratio", n:"Current Assets", d:"Current Liabilities", tip:RATIO_MEANING["Current Ratio"] },
-      { name:"Gross Margin", n:"Gross Profit", d:"Revenue", tip:RATIO_MEANING["Gross Margin"] },
-      { name:"Net Margin", n:"Net Income", d:"Revenue", tip:RATIO_MEANING["Net Margin"] },
-      { name:"Operating Margin", n:"Operating Income", d:"Revenue", tip:RATIO_MEANING["Operating Margin"] },
-      { name:"ROE", n:"Net Income", d:"Equity", tip:RATIO_MEANING["Return on Equity"] },
-      { name:"ROA", n:"Net Income", d:"Total Assets", tip:RATIO_MEANING["Return on Assets"] },
-      { name:"Debt to Equity", n:"Total Liabilities", d:"Equity", tip:RATIO_MEANING["Debt to Equity"] },
-      { name:"Debt-to-Assets", n:"Total Liabilities", d:"Total Assets", tip:RATIO_MEANING["Debt-to-Assets"] },
-      { name:"Op CF to Sales", n:"Cash from Operations", d:"Revenue", tip:RATIO_MEANING["Operating Cash Flow to Sales"] },
-      { name:"CapEx to Revenue", n:"CapEx", d:"Revenue", tip:RATIO_MEANING["CapEx to Revenue"] },
-      { name:"Asset Turnover", n:"Revenue", d:"Total Assets", tip:RATIO_MEANING["Asset Turnover"] },
-      { name:"FCF Margin", n:"Free Cash Flow", d:"Revenue", tip:RATIO_MEANING["FCF Margin"] },
+      { name:"Current Ratio", numerator:"Current Assets", denominator:"Current Liabilities", label:"Current Ratio", tip:RATIO_MEANING["Current Ratio"] },
+      { name:"Gross Margin", numerator:"Gross Profit", denominator:"Revenue", label:"Gross Margin", tip:RATIO_MEANING["Gross Margin"] },
+      { name:"Net Margin", numerator:"Net Income", denominator:"Revenue", label:"Net Margin", tip:RATIO_MEANING["Net Margin"] },
+      { name:"Operating Margin", numerator:"Operating Income", denominator:"Revenue", label:"Operating Margin", tip:RATIO_MEANING["Operating Margin"] },
+      { name:"ROE", numerator:"Net Income", denominator:"Equity", label:"Return on Equity", tip:RATIO_MEANING["Return on Equity"] },
+      { name:"ROA", numerator:"Net Income", denominator:"Total Assets", label:"Return on Assets", tip:RATIO_MEANING["Return on Assets"] },
+      { name:"Debt to Equity", numerator:"Total Liabilities", denominator:"Equity", label:"Debt to Equity", tip:RATIO_MEANING["Debt to Equity"] },
+      { name:"Debt-to-Assets", numerator:"Total Liabilities", denominator:"Total Assets", label:"Debt-to-Assets", tip:RATIO_MEANING["Debt-to-Assets"] },
+      { name:"Op CF to Sales", numerator:"Cash from Operations", denominator:"Revenue", label:"Operating Cash Flow to Sales", tip:RATIO_MEANING["Operating Cash Flow to Sales"] },
+      { name:"CapEx to Revenue", numerator:"CapEx", denominator:"Revenue", label:"CapEx to Revenue", tip:RATIO_MEANING["CapEx to Revenue"] },
+      { name:"Asset Turnover", numerator:"Revenue", denominator:"Total Assets", label:"Asset Turnover", tip:RATIO_MEANING["Asset Turnover"] },
+      { name:"FCF Margin", numerator:"Free Cash Flow", denominator:"Revenue", label:"FCF Margin", tip:RATIO_MEANING["FCF Margin"] },
+      { name:"Inventory Turnover", numerator:"Cost of Revenues", denominator:"Average Inventory", label:"Inventory Turnover Ratio", tip:RATIO_MEANING["Inventory Turnover Ratio"], highlight:["Cost of Revenues","Average Inventory"] },
+      { name:"Days in Inventory", numerator:"Cost of Revenues", denominator:"Average Inventory", label:"Days in Inventory", type:"days_in_inventory", tip:RATIO_MEANING["Days in Inventory"], highlight:["Cost of Revenues","Average Inventory"] },
     ];
 
     const fmtMoney = n=>{
@@ -168,8 +173,56 @@
       const base=unit==="B"?n/1e9:unit==="M"?n/1e6:unit==="K"?n/1e3:n;
       return `${base.toFixed(2)}${unit}`;
     };
+    const safeNum = v => (typeof v === "number" && Number.isFinite(v)) ? v : null;
+    const deriveInventoryMetrics = (company, year, inc, bal) => {
+      const out = {};
+      if (!company || !company.data || !company.data.statements) return out;
+      const statements = company.data.statements;
+      const currInv = safeNum(bal ? bal["Inventory"] : null);
+      const years = Array.isArray(company.years) ? company.years : [];
+      const idx = years.indexOf(year);
+      let prevInv = null;
+      if (idx !== -1) {
+        const prevYear = years[idx + 1];
+        if (prevYear != null) {
+          prevInv = safeNum(statements[prevYear]?.BalanceSheet?.["Inventory"]);
+        }
+      }
+      const inventoryPoints = [];
+      if (currInv != null) inventoryPoints.push(currInv);
+      if (prevInv != null) inventoryPoints.push(prevInv);
+      if (inventoryPoints.length > 0) {
+        const avgInventory = inventoryPoints.reduce((sum, v) => sum + v, 0) / inventoryPoints.length;
+        out["Average Inventory"] = avgInventory;
+        const cogs = safeNum(inc ? inc["Cost of Revenues"] : null);
+        if (cogs != null && avgInventory !== 0) {
+          const turnover = cogs / avgInventory;
+          out["Inventory Turnover Ratio"] = turnover;
+          if (turnover !== 0) {
+            out["Days in Inventory"] = 365 / turnover;
+          }
+        }
+      }
+      return out;
+    };
+    const computeRatioValue = (metrics, def) => {
+      if (!metrics || !def) return null;
+      if (def.type === "days_in_inventory") {
+        const days = safeNum(metrics["Days in Inventory"]);
+        if (days != null) return days;
+        const cogs = safeNum(metrics[def.numerator]);
+        const avgInv = safeNum(metrics[def.denominator]);
+        if (cogs == null || avgInv == null || avgInv === 0) return null;
+        const turnover = cogs / avgInv;
+        return turnover === 0 ? null : 365 / turnover;
+      }
+      const n = safeNum(metrics[def.numerator]);
+      const d = safeNum(metrics[def.denominator]);
+      if (n == null || d == null || d === 0) return null;
+      return n / d;
+    };
     const ratioLabel=(num,den)=>KNOWN[`${num}/${den}`]||`${num} ÷ ${den}`;
-    const higherIsBetter=label=>/(debt to equity|debt[- ]to[- ]assets)/i.test(label)?false:true;
+    const higherIsBetter=label=>/(debt to equity|debt[- ]to[- ]assets|days in inventory)/i.test(label)?false:true;
 
     const Tag=({children})=><span className="px-2 py-0.5 rounded-full text-[11px] subtle border" style={{borderColor:'var(--border)'}}>{children}</span>;
     const IconBtn=({onClick, title, children})=><button className="btn btn-ghost btn-icon" style={{borderColor:'var(--border)'}} title={title} onClick={onClick}>{children}</button>;
@@ -269,7 +322,7 @@
         if (!out.statements[y]) out.statements[y] = { IncomeStatement:{}, BalanceSheet:{}, CashFlow:{} };
         out.statements[y].IncomeStatement = {
           Revenue:+row.totalRevenue||0,
-          "Cost of Revenue":+row.costOfRevenue||0,
+          "Cost of Revenues":+row.costOfRevenue||0,
           "Gross Profit":+row.grossProfit||0,
           "Operating Income":+row.operatingIncome||0,
           "Net Income":+row.netIncome||0,
@@ -285,6 +338,7 @@
           Equity:+row.totalShareholderEquity||0,
           "Current Assets":+row.totalCurrentAssets||0,
           "Current Liabilities":+row.totalCurrentLiabilities||0,
+          "Inventory":+row.inventory||0,
         };
       }
       for (const row of cfReports) {
@@ -346,7 +400,17 @@
     function RatioBuilder({onMakeRatio}){
       const [num,setNum]=useState(null);
       const [den,setDen]=useState(null);
-      const build = ()=>{ if(num && den){ onMakeRatio(num,den); setNum(null); setDen(null); } };
+      const build = ()=>{
+        if(num && den){
+          onMakeRatio({
+            numerator:num.label,
+            denominator:den.label,
+            label:ratioLabel(num.label, den.label),
+          });
+          setNum(null);
+          setDen(null);
+        }
+      };
 
       return (
         <div className="card p-3">
@@ -376,7 +440,13 @@
                 className="btn btn-ghost text-[12px] px-2.5 py-1.5"
                 style={{borderColor:'var(--border)'}}
                 title={`${r.name}. ${r.tip}`}
-                onClick={()=>onMakeRatio({label:r.n,value:1},{label:r.d,value:1})}
+                onClick={()=>onMakeRatio({
+                  numerator:r.numerator,
+                  denominator:r.denominator,
+                  label:r.label,
+                  type:r.type,
+                  highlight:r.highlight,
+                })}
               >
                 {r.name}
               </button>
@@ -397,17 +467,18 @@
         const inc = s?.IncomeStatement || {};
         const bal = s?.BalanceSheet || {};
         const cfs = s?.CashFlow || {};
-        return { year: y, metrics: { ...inc, ...bal, ...cfs } };
+        const derived = deriveInventoryMetrics(c, y, inc, bal);
+        return { year: y, metrics: { ...inc, ...bal, ...cfs, ...derived } };
       }
 
       function buildPayload() {
         const compactCompanies = items.map(it => {
           const { year, metrics } = pool(it);
           const ratios = ratioDefs.map(r => {
-            const n = metrics[r.numerator];
-            const d = metrics[r.denominator];
-            const v = (typeof n === "number" && typeof d === "number" && d !== 0) ? n / d : null;
-            return { label: r.label, numerator: r.numerator, denominator: r.denominator, value: v };
+            const v = computeRatioValue(metrics, r);
+            const ratioEntry = { label: r.label, numerator: r.numerator, denominator: r.denominator, value: v };
+            if (r.type) ratioEntry.type = r.type;
+            return ratioEntry;
           });
           const keep = (k) => metrics[k] ?? null;
           const head = {
@@ -415,11 +486,16 @@
             "Gross Profit": keep("Gross Profit"),
             "Operating Income": keep("Operating Income"),
             "Net Income": keep("Net Income"),
+            "Cost of Revenues": keep("Cost of Revenues"),
             "Total Assets": keep("Total Assets"),
             Equity: keep("Equity"),
             "Total Liabilities": keep("Total Liabilities"),
             "Current Assets": keep("Current Assets"),
             "Current Liabilities": keep("Current Liabilities"),
+            Inventory: keep("Inventory"),
+            "Average Inventory": keep("Average Inventory"),
+            "Inventory Turnover Ratio": keep("Inventory Turnover Ratio"),
+            "Days in Inventory": keep("Days in Inventory"),
             "Cash from Operations": keep("Cash from Operations"),
             CapEx: keep("CapEx"),
             "Free Cash Flow": keep("Free Cash Flow"),
@@ -429,7 +505,11 @@
 
         return {
           companies: compactCompanies,
-          ratioDefs: ratioDefs.map(r => ({ label: r.label, numerator: r.numerator, denominator: r.denominator })),
+          ratioDefs: ratioDefs.map(r => {
+            const base = { label: r.label, numerator: r.numerator, denominator: r.denominator };
+            if (r.type) base.type = r.type;
+            return base;
+          }),
           baselineIdx
         };
       }
@@ -479,9 +559,14 @@
       const inc = s && s.IncomeStatement ? s.IncomeStatement : null;
       const bal = s && s.BalanceSheet ? s.BalanceSheet : null;
       const cfs = s && s.CashFlow ? s.CashFlow : null;
+      const derived = deriveInventoryMetrics(company, y, inc, bal);
+      const balanceData = bal ? { ...bal } : null;
+      if (balanceData && Object.prototype.hasOwnProperty.call(derived, "Average Inventory")) {
+        balanceData["Average Inventory"] = derived["Average Inventory"];
+      }
       const blocks=[
         {title:"INCOME",data:inc},
-        {title:"BALANCE",data:bal},
+        {title:"BALANCE",data:balanceData},
         {title:"CASH FLOW",data:cfs},
       ];
       return (
@@ -593,12 +678,12 @@
         const inc=s && s.IncomeStatement ? s.IncomeStatement : {};
         const bal=s && s.BalanceSheet ? s.BalanceSheet : {};
         const cfs=s && s.CashFlow ? s.CashFlow : {};
-        return {...inc,...bal,...cfs};
+        const derived = deriveInventoryMetrics(c, y, inc, bal);
+        return {...inc,...bal,...cfs,...derived};
       }
       function val(c,def){
-        const p=pool(c); const n=p[def.numerator], d=p[def.denominator];
-        if(typeof n!=="number"||typeof d!=="number"||d===0) return null;
-        return n/d;
+        const metrics=pool(c);
+        return computeRatioValue(metrics, def);
       }
       const baseItem = items.find(it => it._idx === baselineIdx);
       const baseValFor = r => baseItem ? val(baseItem, r) : null;
@@ -663,7 +748,8 @@
                           const d=p[r.denominator];
                           const v=vals[i];
                           const isPct=/Margin|Return|to Sales|FCF|Operating Margin/i.test(r.label);
-                          const txt=v==null?"N/A":isPct?`${(v*100).toFixed(1)}%`:v.toFixed(2);
+                          const isDays=/Days/i.test(r.label);
+                          const txt=v==null?"N/A":isPct?`${(v*100).toFixed(1)}%`:isDays?`${v.toFixed(1)}`:v.toFixed(2);
                           let badge=null, color="";
                           if(baseVal!=null && v!=null && it._idx!==baselineIdx && Math.abs(baseVal)>0){
                             const diff=((v-baseVal)/Math.abs(baseVal))*100;
@@ -672,9 +758,19 @@
                             color=better?"var(--accent)":"#c0392b";
                           }
                           const best=i===bestIdx && v!=null;
-                          const tip = (typeof n==='number' && typeof d==='number' && d!==0)
-                            ? `${r.numerator} (${fmtMoney(n)}) ÷ ${r.denominator} (${fmtMoney(d)}) = ${txt}. ${meaning}`
-                            : `Not enough data to compute. ${meaning}`;
+                          let tip;
+                          if (typeof n==='number' && typeof d==='number' && d!==0) {
+                            if (r.type === "days_in_inventory") {
+                              const turnover = n/d;
+                              const days = turnover!==0 ? 365/turnover : null;
+                              const daysTxt = days!=null ? days.toFixed(1) : "N/A";
+                              tip = `${r.numerator} (${fmtMoney(n)}) ÷ ${r.denominator} (${fmtMoney(d)}) = ${turnover.toFixed(2)} turns. 365 ÷ ${turnover.toFixed(2)} = ${daysTxt}. ${meaning}`;
+                            } else {
+                              tip = `${r.numerator} (${fmtMoney(n)}) ÷ ${r.denominator} (${fmtMoney(d)}) = ${txt}. ${meaning}`;
+                            }
+                          } else {
+                            tip = `Not enough data to compute. ${meaning}`;
+                          }
 
                           return (
                               <td
@@ -751,15 +847,32 @@
           return {...c, yearIndex: next};
         }));
       }
-      function makeRatio(n,d){
-        const lbl=ratioLabel(n.label,d.label);
-        const entry={numerator:n.label,denominator:d.label,label:lbl};
-        setRatioDefs(p=>p.some(r=>r.numerator===entry.numerator && r.denominator===entry.denominator)?p:[...p,entry]);
+      function makeRatio(def){
+        if (!def) return;
+        const numerator = def.numerator;
+        const denominator = def.denominator;
+        if (!numerator || !denominator) return;
+        const label = def.label || ratioLabel(numerator, denominator);
+        const entry = { numerator, denominator, label };
+        if (def.type) entry.type = def.type;
+        if (def.highlight) entry.highlight = def.highlight;
+        setRatioDefs(p=>p.some(r=>
+          r.numerator===entry.numerator &&
+          r.denominator===entry.denominator &&
+          (r.type||"") === (entry.type||"")
+        ) ? p : [...p, entry]);
 
-        // highlight ingredients on baseline
+        const highlightKeys = (def.highlight && def.highlight.length>0)
+          ? def.highlight
+          : [numerator, denominator].filter(Boolean);
+
         if (hlTimerRef.current) clearTimeout(hlTimerRef.current);
-        setHighlightSet(new Set([n.label, d.label]));
-        hlTimerRef.current = setTimeout(()=>setHighlightSet(null), 3500);
+        if (highlightKeys.length>0) {
+          setHighlightSet(new Set(highlightKeys));
+          hlTimerRef.current = setTimeout(()=>setHighlightSet(null), 3500);
+        } else {
+          setHighlightSet(null);
+        }
       }
       function removeRatio(idx){
         setRatioDefs(p=>p.filter((_,i)=>i!==idx));
@@ -773,7 +886,8 @@
       useEffect(() => { setHoverHi(null); }, [ratioDefs, companies.length]);
       
       function handleHover(idx, r){
-         setHoverHi({ idx, set: new Set([r.numerator, r.denominator]) });
+         const highlight = (r.highlight && r.highlight.length>0) ? r.highlight : [r.numerator, r.denominator];
+         setHoverHi({ idx, set: new Set(highlight.filter(Boolean)) });
        }
        function clearHover(){
          setHoverHi(null);
